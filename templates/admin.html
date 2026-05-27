@@ -1,0 +1,946 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0"/>
+  <title>RoadWatch — Admin Panel</title>
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link href="https://fonts.googleapis.com/css2?family=Share+Tech+Mono&family=Barlow+Condensed:wght@400;600;700;900&family=Barlow:wght@400;500&display=swap" rel="stylesheet">
+  <link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css"/>
+  <style>
+    :root {
+      --bg:        #0b0f14;
+      --surface:   #111820;
+      --border:    #1e2d3d;
+      --accent:    #00d4ff;
+      --accent2:   #ff6b35;
+      --high:      #ff3b3b;
+      --medium:    #ffaa00;
+      --low:       #3ddc84;
+      --text:      #c9d8e8;
+      --muted:     #4a6278;
+      --font-mono: 'Share Tech Mono', monospace;
+      --font-head: 'Barlow Condensed', sans-serif;
+      --font-body: 'Barlow', sans-serif;
+    }
+
+    *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+
+    body {
+      background: var(--bg);
+      color: var(--text);
+      font-family: var(--font-body);
+      min-height: 100vh;
+      overflow-x: hidden;
+    }
+
+    /* ── SCANLINE OVERLAY ── */
+    body::before {
+      content: '';
+      position: fixed; inset: 0;
+      background: repeating-linear-gradient(
+        0deg,
+        transparent,
+        transparent 2px,
+        rgba(0,0,0,0.08) 2px,
+        rgba(0,0,0,0.08) 4px
+      );
+      pointer-events: none;
+      z-index: 9999;
+    }
+
+    /* ── HEADER ── */
+    header {
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      padding: 14px 32px;
+      background: var(--surface);
+      border-bottom: 1px solid var(--border);
+      position: sticky; top: 0; z-index: 100;
+    }
+
+    .logo {
+      display: flex; align-items: center; gap: 12px;
+    }
+    .logo-icon {
+      width: 36px; height: 36px;
+      background: var(--accent);
+      clip-path: polygon(50% 0%, 100% 25%, 100% 75%, 50% 100%, 0% 75%, 0% 25%);
+      display: flex; align-items: center; justify-content: center;
+      font-size: 16px;
+      animation: pulse-hex 2.5s ease-in-out infinite;
+    }
+    @keyframes pulse-hex {
+      0%, 100% { box-shadow: 0 0 0 0 rgba(0,212,255,0.4); }
+      50%       { box-shadow: 0 0 0 8px rgba(0,212,255,0); }
+    }
+    .logo-text {
+      font-family: var(--font-head);
+      font-weight: 900;
+      font-size: 22px;
+      letter-spacing: 3px;
+      text-transform: uppercase;
+      color: #fff;
+    }
+    .logo-text span { color: var(--accent); }
+
+    .header-right {
+      display: flex; align-items: center; gap: 20px;
+    }
+    .live-dot {
+      display: flex; align-items: center; gap: 7px;
+      font-family: var(--font-mono);
+      font-size: 11px;
+      color: var(--low);
+      letter-spacing: 1px;
+    }
+    .live-dot::before {
+      content: '';
+      width: 7px; height: 7px;
+      border-radius: 50%;
+      background: var(--low);
+      animation: blink 1.2s step-start infinite;
+    }
+    @keyframes blink { 50% { opacity: 0; } }
+
+    .nav-link {
+      font-family: var(--font-head);
+      font-weight: 600;
+      font-size: 14px;
+      letter-spacing: 2px;
+      text-transform: uppercase;
+      color: var(--muted);
+      text-decoration: none;
+      padding: 6px 12px;
+      border: 1px solid transparent;
+      transition: all .2s;
+    }
+    .nav-link:hover { color: var(--accent); border-color: var(--border); }
+    .nav-link.active { color: var(--accent); border-color: var(--accent); background: rgba(0,212,255,0.06); }
+
+    /* ── MAIN LAYOUT ── */
+    main {
+      max-width: 1400px;
+      margin: 0 auto;
+      padding: 28px 32px;
+      display: flex;
+      flex-direction: column;
+      gap: 24px;
+    }
+
+    /* ── SECTION TITLE ── */
+    .section-title {
+      font-family: var(--font-head);
+      font-weight: 700;
+      font-size: 13px;
+      letter-spacing: 3px;
+      text-transform: uppercase;
+      color: var(--muted);
+      margin-bottom: 14px;
+      display: flex;
+      align-items: center;
+      gap: 10px;
+    }
+    .section-title::after {
+      content: '';
+      flex: 1;
+      height: 1px;
+      background: var(--border);
+    }
+
+    /* ── STAT CARDS ── */
+    .stats-row {
+      display: grid;
+      grid-template-columns: repeat(4, 1fr);
+      gap: 14px;
+    }
+
+    .stat-card {
+      background: var(--surface);
+      border: 1px solid var(--border);
+      padding: 18px 22px;
+      position: relative;
+      overflow: hidden;
+      transition: border-color .25s;
+    }
+    .stat-card:hover { border-color: var(--accent); }
+    .stat-card::before {
+      content: '';
+      position: absolute;
+      top: 0; left: 0;
+      width: 3px; height: 100%;
+      background: var(--card-accent, var(--accent));
+    }
+    .stat-card.high   { --card-accent: var(--high); }
+    .stat-card.medium { --card-accent: var(--medium); }
+    .stat-card.low    { --card-accent: var(--low); }
+
+    .stat-label {
+      font-family: var(--font-mono);
+      font-size: 10px;
+      letter-spacing: 2px;
+      text-transform: uppercase;
+      color: var(--muted);
+      margin-bottom: 8px;
+    }
+    .stat-value {
+      font-family: var(--font-head);
+      font-weight: 900;
+      font-size: 42px;
+      line-height: 1;
+      color: #fff;
+      transition: transform .3s;
+    }
+    .stat-card:hover .stat-value { transform: scale(1.05); }
+    .stat-sub {
+      font-size: 11px;
+      color: var(--muted);
+      margin-top: 6px;
+    }
+
+    /* ── CONTROLS ── */
+    .controls {
+      display: flex;
+      align-items: center;
+      gap: 14px;
+      flex-wrap: wrap;
+    }
+
+    .filter-group {
+      display: flex;
+      border: 1px solid var(--border);
+      overflow: hidden;
+    }
+    .filter-btn {
+      font-family: var(--font-head);
+      font-weight: 700;
+      font-size: 12px;
+      letter-spacing: 2px;
+      text-transform: uppercase;
+      padding: 8px 18px;
+      background: transparent;
+      color: var(--muted);
+      border: none;
+      border-right: 1px solid var(--border);
+      cursor: pointer;
+      transition: all .2s;
+    }
+    .filter-btn:last-child { border-right: none; }
+    .filter-btn:hover { color: var(--text); background: rgba(255,255,255,0.04); }
+    .filter-btn.active { color: #000; background: var(--filter-color, var(--accent)); }
+    .filter-btn[data-filter="ALL"].active    { background: var(--accent); }
+    .filter-btn[data-filter="High"].active   { background: var(--high); }
+    .filter-btn[data-filter="Medium"].active { background: var(--medium); }
+    .filter-btn[data-filter="Low"].active    { background: var(--low); }
+    .filter-btn[data-filter="resolved"].active { background: var(--muted); color: #fff; }
+
+    .search-box {
+      flex: 1;
+      min-width: 200px;
+      background: var(--surface);
+      border: 1px solid var(--border);
+      color: var(--text);
+      font-family: var(--font-mono);
+      font-size: 12px;
+      padding: 8px 14px;
+      outline: none;
+      transition: border-color .2s;
+    }
+    .search-box::placeholder { color: var(--muted); }
+    .search-box:focus { border-color: var(--accent); }
+
+    .btn-action {
+      font-family: var(--font-head);
+      font-weight: 700;
+      font-size: 12px;
+      letter-spacing: 2px;
+      text-transform: uppercase;
+      padding: 9px 20px;
+      border: 1px solid;
+      cursor: pointer;
+      transition: all .2s;
+      background: transparent;
+    }
+    .btn-refresh {
+      color: var(--accent);
+      border-color: var(--accent);
+    }
+    .btn-refresh:hover { background: var(--accent); color: #000; }
+
+    /* ── TABLE ── */
+    .table-wrap {
+      background: var(--surface);
+      border: 1px solid var(--border);
+      overflow: hidden;
+    }
+
+    table {
+      width: 100%;
+      border-collapse: collapse;
+    }
+
+    thead tr {
+      background: rgba(0,212,255,0.05);
+      border-bottom: 1px solid var(--border);
+    }
+    th {
+      font-family: var(--font-mono);
+      font-size: 10px;
+      letter-spacing: 2px;
+      text-transform: uppercase;
+      color: var(--muted);
+      padding: 12px 16px;
+      text-align: left;
+      white-space: nowrap;
+    }
+    th.sortable { cursor: pointer; user-select: none; }
+    th.sortable:hover { color: var(--accent); }
+    th .sort-icon { margin-left: 4px; opacity: 0.4; }
+    th.asc .sort-icon::after  { content: ' ▲'; opacity: 1; color: var(--accent); }
+    th.desc .sort-icon::after { content: ' ▼'; opacity: 1; color: var(--accent); }
+
+    tbody tr {
+      border-bottom: 1px solid rgba(30,45,61,0.6);
+      transition: background .15s;
+      animation: row-in .3s ease both;
+    }
+    @keyframes row-in {
+      from { opacity: 0; transform: translateX(-8px); }
+      to   { opacity: 1; transform: translateX(0); }
+    }
+    tbody tr:hover { background: rgba(0,212,255,0.04); }
+    tbody tr.resolved-row { opacity: 0.45; }
+
+    td {
+      padding: 12px 16px;
+      font-size: 13px;
+      vertical-align: middle;
+    }
+
+    .id-cell {
+      font-family: var(--font-mono);
+      font-size: 10px;
+      color: var(--muted);
+      max-width: 90px;
+      overflow: hidden;
+      text-overflow: ellipsis;
+      white-space: nowrap;
+    }
+
+    .severity-badge {
+      display: inline-block;
+      font-family: var(--font-mono);
+      font-size: 10px;
+      letter-spacing: 1.5px;
+      text-transform: uppercase;
+      padding: 3px 10px;
+      border: 1px solid;
+      font-weight: bold;
+    }
+    .badge-High   { color: var(--high);   border-color: var(--high);   background: rgba(255,59,59,0.1); }
+    .badge-Medium { color: var(--medium); border-color: var(--medium); background: rgba(255,170,0,0.1); }
+    .badge-Low    { color: var(--low);    border-color: var(--low);    background: rgba(61,220,132,0.1); }
+
+    .status-badge {
+      display: inline-flex; align-items: center; gap: 5px;
+      font-family: var(--font-mono);
+      font-size: 10px;
+      letter-spacing: 1px;
+      text-transform: uppercase;
+    }
+    .status-badge::before {
+      content: '';
+      width: 6px; height: 6px;
+      border-radius: 50%;
+      background: currentColor;
+    }
+    .status-active   { color: var(--accent); }
+    .status-resolved { color: var(--muted); }
+
+    .source-badge {
+      font-family: var(--font-mono);
+      font-size: 10px;
+      color: var(--muted);
+      letter-spacing: 1px;
+      text-transform: uppercase;
+    }
+
+    .coord-cell {
+      font-family: var(--font-mono);
+      font-size: 11px;
+      color: var(--text);
+    }
+
+    .timestamp-cell {
+      font-family: var(--font-mono);
+      font-size: 11px;
+      color: var(--muted);
+      white-space: nowrap;
+    }
+
+    .action-cell {
+      display: flex;
+      gap: 8px;
+    }
+
+    .btn-resolve, .btn-delete {
+      font-family: var(--font-head);
+      font-weight: 700;
+      font-size: 11px;
+      letter-spacing: 1.5px;
+      text-transform: uppercase;
+      padding: 5px 13px;
+      border: 1px solid;
+      cursor: pointer;
+      background: transparent;
+      transition: all .18s;
+      white-space: nowrap;
+    }
+    .btn-resolve {
+      color: var(--low);
+      border-color: var(--low);
+    }
+    .btn-resolve:hover { background: var(--low); color: #000; }
+    .btn-resolve:disabled { opacity: 0.35; cursor: default; }
+    .btn-resolve:disabled:hover { background: transparent; color: var(--low); }
+
+    .btn-delete {
+      color: var(--high);
+      border-color: var(--high);
+    }
+    .btn-delete:hover { background: var(--high); color: #fff; }
+
+    /* ── EMPTY / LOADING STATES ── */
+    .table-message {
+      text-align: center;
+      padding: 60px 20px;
+      font-family: var(--font-mono);
+      font-size: 13px;
+      color: var(--muted);
+      letter-spacing: 1px;
+    }
+    .spinner {
+      display: inline-block;
+      width: 18px; height: 18px;
+      border: 2px solid var(--border);
+      border-top-color: var(--accent);
+      border-radius: 50%;
+      animation: spin .7s linear infinite;
+      vertical-align: middle;
+      margin-right: 8px;
+    }
+    @keyframes spin { to { transform: rotate(360deg); } }
+
+    /* ── TOAST ── */
+    #toast-container {
+      position: fixed;
+      bottom: 28px; right: 28px;
+      display: flex; flex-direction: column; gap: 10px;
+      z-index: 9998;
+    }
+    .toast {
+      font-family: var(--font-mono);
+      font-size: 12px;
+      letter-spacing: 1px;
+      padding: 12px 20px;
+      border-left: 3px solid var(--toast-color, var(--accent));
+      background: var(--surface);
+      border-top: 1px solid var(--border);
+      border-right: 1px solid var(--border);
+      border-bottom: 1px solid var(--border);
+      color: var(--text);
+      animation: toast-in .25s ease;
+      max-width: 320px;
+    }
+    @keyframes toast-in {
+      from { opacity: 0; transform: translateX(20px); }
+      to   { opacity: 1; transform: translateX(0); }
+    }
+    .toast.success { --toast-color: var(--low); }
+    .toast.error   { --toast-color: var(--high); }
+    .toast.info    { --toast-color: var(--accent); }
+
+    /* ── CONFIRM MODAL ── */
+    #modal-overlay {
+      position: fixed; inset: 0;
+      background: rgba(0,0,0,0.7);
+      display: flex; align-items: center; justify-content: center;
+      z-index: 500;
+      opacity: 0; pointer-events: none;
+      transition: opacity .2s;
+    }
+    #modal-overlay.visible { opacity: 1; pointer-events: all; }
+    .modal-box {
+      background: var(--surface);
+      border: 1px solid var(--high);
+      padding: 32px 36px;
+      max-width: 400px;
+      width: 90%;
+      transform: scale(0.95);
+      transition: transform .2s;
+    }
+    #modal-overlay.visible .modal-box { transform: scale(1); }
+    .modal-title {
+      font-family: var(--font-head);
+      font-weight: 900;
+      font-size: 20px;
+      letter-spacing: 2px;
+      text-transform: uppercase;
+      color: var(--high);
+      margin-bottom: 10px;
+    }
+    .modal-body {
+      font-size: 13px;
+      color: var(--muted);
+      line-height: 1.6;
+      margin-bottom: 24px;
+    }
+    .modal-id {
+      font-family: var(--font-mono);
+      font-size: 11px;
+      color: var(--text);
+      padding: 8px 12px;
+      background: rgba(255,59,59,0.08);
+      border: 1px solid rgba(255,59,59,0.2);
+      margin-bottom: 20px;
+      word-break: break-all;
+    }
+    .modal-actions { display: flex; gap: 12px; justify-content: flex-end; }
+    .btn-cancel {
+      font-family: var(--font-head); font-weight: 700;
+      font-size: 12px; letter-spacing: 2px; text-transform: uppercase;
+      padding: 9px 22px; border: 1px solid var(--border);
+      color: var(--muted); background: transparent; cursor: pointer;
+      transition: all .2s;
+    }
+    .btn-cancel:hover { border-color: var(--text); color: var(--text); }
+    .btn-confirm-delete {
+      font-family: var(--font-head); font-weight: 700;
+      font-size: 12px; letter-spacing: 2px; text-transform: uppercase;
+      padding: 9px 22px; border: 1px solid var(--high);
+      color: var(--high); background: transparent; cursor: pointer;
+      transition: all .2s;
+    }
+    .btn-confirm-delete:hover { background: var(--high); color: #fff; }
+
+    /* ── FOOTER ── */
+    footer {
+      text-align: center;
+      padding: 20px;
+      font-family: var(--font-mono);
+      font-size: 10px;
+      letter-spacing: 2px;
+      color: var(--muted);
+      border-top: 1px solid var(--border);
+      margin-top: 12px;
+    }
+
+    /* ── RESPONSIVE ── */
+    @media (max-width: 900px) {
+      main { padding: 16px; }
+      .stats-row { grid-template-columns: repeat(2, 1fr); }
+      header { padding: 12px 16px; }
+      .nav-link { display: none; }
+    }
+  </style>
+</head>
+<body>
+
+<!-- HEADER -->
+<header>
+  <div class="logo">
+    <div class="logo-icon">⬡</div>
+    <div class="logo-text">Road<span>Watch</span></div>
+  </div>
+  <div class="header-right">
+    <div class="live-dot">SYSTEM ONLINE</div>
+    <a href="/" class="nav-link">Dashboard</a>
+    <a href="/admin" class="nav-link active">Admin</a>
+  </div>
+</header>
+
+<!-- MAIN -->
+<main>
+
+  <!-- STATS -->
+  <div>
+    <div class="section-title">Overview</div>
+    <div class="stats-row">
+      <div class="stat-card">
+        <div class="stat-label">Total Potholes</div>
+        <div class="stat-value" id="statTotal">—</div>
+        <div class="stat-sub">all records</div>
+      </div>
+      <div class="stat-card high">
+        <div class="stat-label">High Severity</div>
+        <div class="stat-value" id="statHigh" style="color:var(--high)">—</div>
+        <div class="stat-sub">immediate action required</div>
+      </div>
+      <div class="stat-card medium">
+        <div class="stat-label">Medium Severity</div>
+        <div class="stat-value" id="statMedium" style="color:var(--medium)">—</div>
+        <div class="stat-sub">monitor closely</div>
+      </div>
+      <div class="stat-card low">
+        <div class="stat-label">Resolved</div>
+        <div class="stat-value" id="statResolved" style="color:var(--low)">—</div>
+        <div class="stat-sub">marked as fixed</div>
+      </div>
+    </div>
+  </div>
+
+  <!-- TABLE -->
+  <div>
+    <div class="section-title">Pothole Records</div>
+
+    <!-- Controls -->
+    <div class="controls" style="margin-bottom:14px;">
+      <div class="filter-group">
+        <button class="filter-btn active" data-filter="ALL">All</button>
+        <button class="filter-btn" data-filter="High">High</button>
+        <button class="filter-btn" data-filter="Medium">Medium</button>
+        <button class="filter-btn" data-filter="Low">Low</button>
+        <button class="filter-btn" data-filter="resolved">Resolved</button>
+      </div>
+      <input class="search-box" type="text" id="searchInput" placeholder="Search by ID, source, severity…">
+      <button class="btn-action btn-refresh" id="btnRefresh">↺ Refresh</button>
+    </div>
+
+    <!-- Table -->
+    <div class="table-wrap">
+      <table id="potholeTable">
+        <thead>
+          <tr>
+            <th>ID</th>
+            <th class="sortable" data-col="severity">Severity <span class="sort-icon"></span></th>
+            <th class="sortable" data-col="status">Status <span class="sort-icon"></span></th>
+            <th>Coordinates</th>
+            <th class="sortable" data-col="timestamp">Timestamp <span class="sort-icon"></span></th>
+            <th>Source</th>
+            <th>Confirms</th>
+            <th>Actions</th>
+          </tr>
+        </thead>
+        <tbody id="tableBody">
+          <tr>
+            <td colspan="8" class="table-message">
+              <span class="spinner"></span> Loading records…
+            </td>
+          </tr>
+        </tbody>
+      </table>
+    </div>
+
+    <!-- Row count -->
+    <div style="text-align:right; margin-top:10px; font-family:var(--font-mono); font-size:11px; color:var(--muted);">
+      Showing <span id="rowCount">0</span> records
+    </div>
+  </div>
+
+</main>
+
+<footer>ROADWATCH ADMIN PANEL — ROAD RIDERS — IIT MADRAS HACKATHON 2026</footer>
+
+<!-- TOAST CONTAINER -->
+<div id="toast-container"></div>
+
+<!-- DELETE CONFIRM MODAL -->
+<div id="modal-overlay">
+  <div class="modal-box">
+    <div class="modal-title">⚠ Confirm Delete</div>
+    <div class="modal-body">This action is permanent and cannot be undone. The following record will be removed from Firebase:</div>
+    <div class="modal-id" id="modalId"></div>
+    <div class="modal-actions">
+      <button class="btn-cancel" id="btnCancelDelete">Cancel</button>
+      <button class="btn-confirm-delete" id="btnConfirmDelete">Delete</button>
+    </div>
+  </div>
+</div>
+
+<!-- ADMIN SCRIPT (inline for single-file delivery) -->
+<script>
+  /* ─────────────────────────────────────────────────────────
+     RoadWatch Admin Panel — admin.js logic (inline)
+     Move to static/admin.js if preferred
+  ───────────────────────────────────────────────────────── */
+
+  // ── STATE ──
+  let allPotholes = [];         // raw array from Firebase
+  let activeFilter = 'ALL';
+  let searchQuery  = '';
+  let sortCol      = 'timestamp';
+  let sortDir      = 'desc';
+  let deleteTarget = null;      // id pending delete confirmation
+
+  // ── FIREBASE CONFIG ──
+  // Replace FIREBASE_DB_URL with your actual URL (same as in app.py)
+  // This panel calls YOUR Flask routes, not Firebase directly.
+  // All reads/writes go through Flask.
+
+  // ── ON LOAD ──
+  document.addEventListener('DOMContentLoaded', () => {
+    loadPotholes();
+    setupFilterButtons();
+    setupSearch();
+    setupSortHeaders();
+    setupModal();
+    document.getElementById('btnRefresh').addEventListener('click', loadPotholes);
+  });
+
+  // ── LOAD POTHOLES ──
+  async function loadPotholes() {
+    setLoading(true);
+    try {
+      const res  = await fetch('/potholes');
+      const data = await res.json();
+
+      // /potholes returns { potholes: [...] } or an array — handle both
+      allPotholes = Array.isArray(data) ? data : (data.potholes || []);
+
+      updateStats();
+      renderTable();
+      showToast('Records loaded', 'info');
+    } catch (err) {
+      showToast('Failed to load records', 'error');
+      document.getElementById('tableBody').innerHTML =
+        `<tr><td colspan="8" class="table-message">⚠ Could not reach server. Is Flask running?</td></tr>`;
+    } finally {
+      setLoading(false);
+    }
+  }
+
+  // ── STATS ──
+  function updateStats() {
+    const total    = allPotholes.length;
+    const high     = allPotholes.filter(p => p.severity === 'High').length;
+    const medium   = allPotholes.filter(p => p.severity === 'Medium').length;
+    const resolved = allPotholes.filter(p => p.status   === 'resolved').length;
+
+    animateCount('statTotal',    total);
+    animateCount('statHigh',     high);
+    animateCount('statMedium',   medium);
+    animateCount('statResolved', resolved);
+  }
+
+  function animateCount(id, target) {
+    const el  = document.getElementById(id);
+    const dur = 600;
+    const start = parseInt(el.textContent) || 0;
+    const step  = (ts, t0) => {
+      const p = Math.min((ts - t0) / dur, 1);
+      el.textContent = Math.round(start + (target - start) * p);
+      if (p < 1) requestAnimationFrame(ts2 => step(ts2, t0));
+    };
+    requestAnimationFrame(ts => step(ts, ts));
+  }
+
+  // ── RENDER TABLE ──
+  function renderTable() {
+    let rows = [...allPotholes];
+
+    // Filter
+    if (activeFilter === 'resolved') {
+      rows = rows.filter(p => p.status === 'resolved');
+    } else if (activeFilter !== 'ALL') {
+      rows = rows.filter(p => p.severity === activeFilter && p.status !== 'resolved');
+    }
+
+    // Search
+    if (searchQuery) {
+      const q = searchQuery.toLowerCase();
+      rows = rows.filter(p =>
+        (p.id        || '').toLowerCase().includes(q) ||
+        (p.severity  || '').toLowerCase().includes(q) ||
+        (p.status    || '').toLowerCase().includes(q) ||
+        (p.source    || '').toLowerCase().includes(q)
+      );
+    }
+
+    // Sort
+    const severityOrder = { High: 3, Medium: 2, Low: 1 };
+    rows.sort((a, b) => {
+      let va, vb;
+      if (sortCol === 'severity') {
+        va = severityOrder[a.severity] || 0;
+        vb = severityOrder[b.severity] || 0;
+      } else if (sortCol === 'timestamp') {
+        va = new Date(a.timestamp || 0).getTime();
+        vb = new Date(b.timestamp || 0).getTime();
+      } else if (sortCol === 'status') {
+        va = a.status || '';
+        vb = b.status || '';
+      }
+      return sortDir === 'asc' ? (va > vb ? 1 : -1) : (va < vb ? 1 : -1);
+    });
+
+    document.getElementById('rowCount').textContent = rows.length;
+
+    if (rows.length === 0) {
+      document.getElementById('tableBody').innerHTML =
+        `<tr><td colspan="8" class="table-message">No records match the current filter.</td></tr>`;
+      return;
+    }
+
+    document.getElementById('tableBody').innerHTML = rows.map((p, i) => {
+      const isResolved = p.status === 'resolved';
+      const ts = p.timestamp ? new Date(p.timestamp).toLocaleString('en-IN', {
+        day: '2-digit', month: 'short', year: '2-digit',
+        hour: '2-digit', minute: '2-digit', hour12: true
+      }) : '—';
+
+      return `
+        <tr class="${isResolved ? 'resolved-row' : ''}" style="animation-delay:${i * 30}ms">
+          <td class="id-cell" title="${p.id || ''}">${(p.id || 'N/A').slice(0, 12)}…</td>
+          <td><span class="severity-badge badge-${p.severity}">${p.severity || '—'}</span></td>
+          <td><span class="status-badge status-${p.status || 'active'}">${p.status || 'active'}</span></td>
+          <td class="coord-cell">${(p.latitude || 0).toFixed(4)}, ${(p.longitude || 0).toFixed(4)}</td>
+          <td class="timestamp-cell">${ts}</td>
+          <td class="source-badge">${p.source || 'manual'}</td>
+          <td style="font-family:var(--font-mono);font-size:12px;">${p.confirmed_count ?? 0}</td>
+          <td>
+            <div class="action-cell">
+              <button class="btn-resolve"
+                onclick="resolveRow('${p.id}')"
+                ${isResolved ? 'disabled' : ''}>
+                ${isResolved ? 'Resolved' : 'Resolve'}
+              </button>
+              <button class="btn-delete" onclick="promptDelete('${p.id}')">Delete</button>
+            </div>
+          </td>
+        </tr>`;
+    }).join('');
+  }
+
+  // ── RESOLVE ──
+  async function resolveRow(id) {
+    try {
+      const res = await fetch('/resolve', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ id })
+      });
+      const data = await res.json();
+      if (res.ok) {
+        const p = allPotholes.find(x => x.id === id);
+        if (p) p.status = 'resolved';
+        updateStats();
+        renderTable();
+        showToast('Pothole marked resolved ✓', 'success');
+      } else {
+        showToast(data.error || 'Resolve failed', 'error');
+      }
+    } catch {
+      showToast('Network error', 'error');
+    }
+  }
+
+  // ── DELETE ──
+  function promptDelete(id) {
+    deleteTarget = id;
+    document.getElementById('modalId').textContent = id;
+    document.getElementById('modal-overlay').classList.add('visible');
+  }
+
+  async function confirmDelete() {
+    if (!deleteTarget) return;
+    closeModal();
+    try {
+      const res = await fetch('/delete', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ id: deleteTarget })
+      });
+      const data = await res.json();
+      if (res.ok) {
+        allPotholes = allPotholes.filter(p => p.id !== deleteTarget);
+        updateStats();
+        renderTable();
+        showToast('Record deleted', 'success');
+      } else {
+        showToast(data.error || 'Delete failed', 'error');
+      }
+    } catch {
+      showToast('Network error', 'error');
+    } finally {
+      deleteTarget = null;
+    }
+  }
+
+  // ── FILTER ──
+  function setupFilterButtons() {
+    document.querySelectorAll('.filter-btn').forEach(btn => {
+      btn.addEventListener('click', () => {
+        document.querySelectorAll('.filter-btn').forEach(b => b.classList.remove('active'));
+        btn.classList.add('active');
+        activeFilter = btn.dataset.filter;
+        renderTable();
+      });
+    });
+  }
+
+  // ── SEARCH ──
+  function setupSearch() {
+    document.getElementById('searchInput').addEventListener('input', e => {
+      searchQuery = e.target.value.trim();
+      renderTable();
+    });
+  }
+
+  // ── SORT ──
+  function setupSortHeaders() {
+    document.querySelectorAll('th.sortable').forEach(th => {
+      th.addEventListener('click', () => {
+        const col = th.dataset.col;
+        if (sortCol === col) {
+          sortDir = sortDir === 'asc' ? 'desc' : 'asc';
+        } else {
+          sortCol = col;
+          sortDir = 'desc';
+        }
+        document.querySelectorAll('th.sortable').forEach(t => {
+          t.classList.remove('asc', 'desc');
+        });
+        th.classList.add(sortDir);
+        renderTable();
+      });
+    });
+  }
+
+  // ── MODAL ──
+  function setupModal() {
+    document.getElementById('btnCancelDelete').addEventListener('click', closeModal);
+    document.getElementById('btnConfirmDelete').addEventListener('click', confirmDelete);
+    document.getElementById('modal-overlay').addEventListener('click', e => {
+      if (e.target === document.getElementById('modal-overlay')) closeModal();
+    });
+  }
+  function closeModal() {
+    document.getElementById('modal-overlay').classList.remove('visible');
+  }
+
+  // ── LOADING STATE ──
+  function setLoading(on) {
+    if (on) {
+      document.getElementById('tableBody').innerHTML =
+        `<tr><td colspan="8" class="table-message"><span class="spinner"></span> Fetching from Firebase…</td></tr>`;
+    }
+  }
+
+  // ── TOAST ──
+  function showToast(msg, type = 'info') {
+    const container = document.getElementById('toast-container');
+    const el = document.createElement('div');
+    el.className = `toast ${type}`;
+    el.textContent = msg;
+    container.appendChild(el);
+    setTimeout(() => {
+      el.style.transition = 'opacity .3s';
+      el.style.opacity = '0';
+      setTimeout(() => el.remove(), 300);
+    }, 3000);
+  }
+</script>
+
+</body>
+</html>

@@ -1,0 +1,368 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8"/>
+<meta name="viewport" content="width=device-width,initial-scale=1"/>
+<title>RoadWatch — Citizen Portal</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link href="https://fonts.googleapis.com/css2?family=Syne:wght@400;600;700;800&family=DM+Sans:wght@300;400;500&family=Share+Tech+Mono&display=swap" rel="stylesheet">
+<link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css"/>
+<style>
+*,*::before,*::after{box-sizing:border-box;margin:0;padding:0}
+:root{
+  --bg:#f0f4f8;
+  --surface:#ffffff;
+  --border:#dde4ec;
+  --accent:#0077ff;
+  --accent-light:#e8f1ff;
+  --high:#e53935;
+  --medium:#f57c00;
+  --low:#2e7d32;
+  --text:#1a2530;
+  --muted:#7a94aa;
+  --font-d:'Syne',sans-serif;
+  --font-b:'DM Sans',sans-serif;
+  --font-m:'Share Tech Mono',monospace;
+}
+body{background:var(--bg);color:var(--text);font-family:var(--font-b);min-height:100vh}
+
+/* NAV */
+nav{
+  background:var(--surface);
+  border-bottom:1px solid var(--border);
+  padding:0 28px;
+  display:flex;align-items:center;justify-content:space-between;
+  height:58px;
+  position:sticky;top:0;z-index:200;
+  box-shadow:0 1px 12px rgba(0,0,0,0.06);
+}
+.nav-brand{font-family:var(--font-d);font-weight:800;font-size:20px;letter-spacing:1px;color:var(--text)}
+.nav-brand span{color:var(--accent)}
+.nav-role{
+  font-family:var(--font-m);font-size:10px;letter-spacing:2px;
+  background:var(--accent-light);color:var(--accent);
+  padding:4px 12px;border:1px solid rgba(0,119,255,0.2);
+}
+.nav-back{font-size:12px;color:var(--muted);text-decoration:none;font-weight:500;transition:color .2s}
+.nav-back:hover{color:var(--accent)}
+
+/* LAYOUT */
+.layout{display:grid;grid-template-columns:380px 1fr;height:calc(100vh - 58px)}
+
+/* LEFT PANEL */
+.panel{
+  background:var(--surface);
+  border-right:1px solid var(--border);
+  overflow-y:auto;
+  padding:24px;
+  display:flex;flex-direction:column;gap:24px;
+}
+
+.panel-title{
+  font-family:var(--font-d);font-weight:800;font-size:22px;
+  color:var(--text);margin-bottom:4px;
+}
+.panel-sub{font-size:13px;color:var(--muted);line-height:1.5}
+
+/* FORM */
+.form-section{
+  background:var(--bg);
+  border:1px solid var(--border);
+  padding:20px;
+}
+.section-head{
+  font-family:var(--font-d);font-weight:700;font-size:13px;
+  letter-spacing:2px;text-transform:uppercase;color:var(--muted);
+  margin-bottom:16px;display:flex;align-items:center;gap:8px;
+}
+.section-head::before{content:'';width:3px;height:14px;background:var(--accent)}
+
+.field{margin-bottom:14px}
+.field label{
+  display:block;font-size:11px;font-weight:600;
+  letter-spacing:1.5px;text-transform:uppercase;
+  color:var(--muted);margin-bottom:6px;
+}
+.field input,.field select,.field textarea{
+  width:100%;padding:10px 14px;
+  background:var(--surface);
+  border:1.5px solid var(--border);
+  color:var(--text);
+  font-family:var(--font-b);font-size:13px;
+  outline:none;transition:border-color .2s;
+  border-radius:0;
+  
+}
+.field input:focus,.field select:focus,.field textarea:focus{border-color:var(--accent)}
+.field textarea{resize:vertical;min-height:70px}
+
+.coord-row{display:grid;grid-template-columns:1fr 1fr;gap:10px}
+
+.btn-locate{
+  width:100%;padding:10px;
+  background:var(--accent-light);
+  border:1.5px solid rgba(0,119,255,0.25);
+  color:var(--accent);
+  font-family:var(--font-d);font-weight:700;font-size:13px;
+  letter-spacing:2px;text-transform:uppercase;
+  cursor:pointer;transition:all .2s;margin-bottom:14px;
+}
+.btn-locate:hover{background:var(--accent);color:#fff}
+
+.map-hint{
+  font-family:var(--font-m);font-size:10px;color:var(--muted);
+  letter-spacing:1px;text-align:center;margin-bottom:14px;
+  padding:8px;background:var(--bg);border:1px dashed var(--border);
+}
+
+.btn-submit{
+  width:100%;padding:14px;
+  background:var(--accent);
+  border:none;color:#fff;
+  font-family:var(--font-d);font-weight:700;font-size:16px;
+  letter-spacing:3px;text-transform:uppercase;
+  cursor:pointer;transition:all .2s;
+  box-shadow:0 4px 16px rgba(0,119,255,0.3);
+}
+.btn-submit:hover{background:#0062d4;box-shadow:0 6px 24px rgba(0,119,255,0.4);transform:translateY(-1px)}
+.btn-submit:active{transform:translateY(0)}
+
+/* MY REPORTS */
+.reports-list{display:flex;flex-direction:column;gap:8px}
+.report-item{
+  padding:12px 14px;
+  background:var(--bg);border:1px solid var(--border);
+  display:flex;align-items:center;gap:12px;
+  animation:slide-in .3s ease both;
+}
+@keyframes slide-in{from{opacity:0;transform:translateX(-10px)}to{opacity:1;transform:none}}
+.report-dot{
+  width:10px;height:10px;border-radius:50%;flex-shrink:0;
+}
+.report-info{flex:1;min-width:0}
+.report-ts{font-family:var(--font-m);font-size:10px;color:var(--muted)}
+.report-loc{font-size:12px;color:var(--text);margin-top:2px;
+  white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.report-badge{
+  font-family:var(--font-m);font-size:9px;letter-spacing:1px;
+  padding:2px 8px;border:1px solid;
+}
+.badge-High{color:var(--high);border-color:var(--high)}
+.badge-Medium{color:var(--medium);border-color:var(--medium)}
+.badge-Low{color:var(--low);border-color:var(--low)}
+
+/* MAP */
+#map{height:100%;width:100%;z-index:1}
+
+/* TOAST */
+#toast{
+  position:fixed;bottom:28px;left:50%;transform:translateX(-50%) translateY(20px);
+  background:var(--text);color:#fff;
+  font-family:var(--font-m);font-size:12px;letter-spacing:1px;
+  padding:12px 24px;opacity:0;transition:all .3s;pointer-events:none;
+  white-space:nowrap;z-index:9999;
+}
+#toast.show{opacity:1;transform:translateX(-50%) translateY(0)}
+#toast.success{background:var(--low)}
+#toast.error{background:var(--high)}
+</style>
+</head>
+<body>
+
+<nav>
+  <div class="nav-brand">Road<span>Watch</span></div>
+  <div class="nav-role">CITIZEN PORTAL</div>
+  <a href="/" class="nav-back">← Switch Role</a>
+</nav>
+
+<div class="layout">
+  <!-- LEFT: form + my reports -->
+  <div class="panel">
+    <div>
+      <div class="panel-title">Report a Pothole</div>
+      <div class="panel-sub">Click the map to pin a location, or enter coordinates manually.</div>
+    </div>
+
+    <!-- LOCATION -->
+    <div class="form-section">
+      <div class="section-head">Location</div>
+      <button class="btn-locate" onclick="useMyLocation()">📍 Use My Current Location</button>
+      <div class="map-hint">— OR click anywhere on the map to drop a pin —</div>
+      <div class="coord-row">
+        <div class="field">
+          <label>Latitude</label>
+          <input type="number" id="lat" placeholder="16.5062" step="0.0001"/>
+        </div>
+        <div class="field">
+          <label>Longitude</label>
+          <input type="number" id="lng" placeholder="80.6480" step="0.0001"/>
+        </div>
+      </div>
+    </div>
+
+    <!-- DETAILS -->
+    <div class="form-section">
+      <div class="section-head">Report Details</div>
+      <div class="field">
+        <label>Severity</label>
+        <select id="severity">
+          <option value="Low">Low — Minor crack / small hole</option>
+          <option value="Medium" selected>Medium — Noticeable pothole</option>
+          <option value="High">High — Large / dangerous hole</option>
+        </select>
+      </div>
+      <div class="field">
+        <label>Description (optional)</label>
+        <textarea id="desc" placeholder="e.g. Large pothole near bus stop, right lane…"></textarea>
+      </div>
+      <div class="field">
+        <label>Your Name (optional)</label>
+        <input type="text" id="reporterName" placeholder="Anonymous"/>
+      </div>
+    </div>
+
+    <button class="btn-submit" onclick="submitReport()">Submit Report</button>
+
+    <!-- MY REPORTS -->
+    <div class="form-section">
+      <div class="section-head">My Reports This Session</div>
+      <div class="reports-list" id="myReports">
+        <div style="font-family:var(--font-m);font-size:11px;color:var(--muted);text-align:center;padding:16px">
+          No reports yet
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <!-- RIGHT: MAP -->
+  <div id="map"></div>
+</div>
+
+<div id="toast"></div>
+
+<script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"></script>
+<script>
+// ── MAP INIT ──
+const map = L.map('map').setView([16.5062, 80.6480], 13);
+L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png',{
+  attribution:'© OpenStreetMap'
+}).addTo(map);
+
+let pinMarker = null;
+let myReports = [];
+
+// ── MAP CLICK → SET COORDS ──
+map.on('click', e => {
+  document.getElementById('lat').value = e.latlng.lat.toFixed(5);
+  document.getElementById('lng').value = e.latlng.lng.toFixed(5);
+  dropPin(e.latlng.lat, e.latlng.lng);
+});
+
+function dropPin(lat, lng){
+  if(pinMarker) map.removeLayer(pinMarker);
+  pinMarker = L.circleMarker([lat,lng],{
+    radius:12, color:'#0077ff', fillColor:'#0077ff',
+    fillOpacity:0.25, weight:2
+  }).addTo(map).bindPopup('📍 Selected location').openPopup();
+}
+
+// ── MY LOCATION ──
+function useMyLocation(){
+  if(!navigator.geolocation){showToast('Geolocation not supported','error');return}
+  navigator.geolocation.getCurrentPosition(pos=>{
+    const {latitude:lat,longitude:lng} = pos.coords;
+    document.getElementById('lat').value = lat.toFixed(5);
+    document.getElementById('lng').value = lng.toFixed(5);
+    map.setView([lat,lng],15);
+    dropPin(lat,lng);
+    showToast('Location detected ✓','success');
+  },()=>showToast('Location access denied','error'));
+}
+
+// ── LOAD ALL POTHOLES ON MAP ──
+function loadAllPotholes(){
+  fetch('/potholes').then(r=>r.json()).then(data=>{
+    const potholes = Array.isArray(data)?data:(data.potholes||[]);
+    potholes.forEach(p=>{
+      if(p.status==='resolved') return;
+      const color = p.severity==='High'?'#e53935':p.severity==='Medium'?'#f57c00':'#2e7d32';
+      L.circleMarker([p.latitude,p.longitude],{
+        radius:p.severity==='High'?11:p.severity==='Medium'?8:6,
+        color,fillColor:color,fillOpacity:0.5,weight:2
+      }).addTo(map).bindPopup(
+        `<b>${p.severity}</b> severity<br>${p.source||'manual'} report<br>
+         <small>${p.timestamp?new Date(p.timestamp).toLocaleString():''}</small>`
+      );
+    });
+  }).catch(()=>{});
+}
+loadAllPotholes();
+
+// ── SUBMIT ──
+async function submitReport(){
+  const lat = parseFloat(document.getElementById('lat').value);
+  const lng = parseFloat(document.getElementById('lng').value);
+  const sev = document.getElementById('severity').value;
+  const desc= document.getElementById('desc').value;
+  const name= document.getElementById('reporterName').value||'Anonymous';
+
+  if(!lat||!lng||isNaN(lat)||isNaN(lng)){
+    showToast('Please select a location first','error'); return;
+  }
+
+  try{
+    const res = await fetch('/report',{
+      method:'POST',
+      headers:{'Content-Type':'application/json'},
+      body: JSON.stringify({
+        latitude:lat, longitude:lng,
+        severity:sev, source:'user',
+        description:desc, reporter:name,
+        timestamp: new Date().toISOString(),
+        status:'active', confirmed_count:1
+      })
+    });
+    if(res.ok){
+      showToast('Report submitted! Thank you 🙏','success');
+      addMyReport(lat,lng,sev);
+      // Add marker to map immediately
+      const color=sev==='High'?'#e53935':sev==='Medium'?'#f57c00':'#2e7d32';
+      L.circleMarker([lat,lng],{
+        radius:sev==='High'?11:sev==='Medium'?8:6,
+        color,fillColor:color,fillOpacity:0.5,weight:2
+      }).addTo(map).bindPopup(`<b>${sev}</b> — Your report<br>${new Date().toLocaleString()}`);
+      // Reset pin
+      document.getElementById('lat').value='';
+      document.getElementById('lng').value='';
+      if(pinMarker){map.removeLayer(pinMarker);pinMarker=null;}
+    } else {
+      showToast('Submission failed — is Flask running?','error');
+    }
+  }catch{showToast('Cannot reach server','error')}
+}
+
+function addMyReport(lat,lng,sev){
+  const ts = new Date().toLocaleTimeString('en-IN');
+  myReports.unshift({lat,lng,sev,ts});
+  const list = document.getElementById('myReports');
+  list.innerHTML = myReports.map(r=>`
+    <div class="report-item">
+      <div class="report-dot" style="background:${r.sev==='High'?'#e53935':r.sev==='Medium'?'#f57c00':'#2e7d32'}"></div>
+      <div class="report-info">
+        <div class="report-ts">${r.ts}</div>
+        <div class="report-loc">${r.lat.toFixed(4)}, ${r.lng.toFixed(4)}</div>
+      </div>
+      <div class="report-badge badge-${r.sev}">${r.sev}</div>
+    </div>
+  `).join('');
+}
+
+// ── TOAST ──
+function showToast(msg,type='info'){
+  const t=document.getElementById('toast');
+  t.textContent=msg; t.className='show '+(type||'');
+  setTimeout(()=>t.className='',3000);
+}
+</script>
+</body>
+</html>

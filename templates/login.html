@@ -1,0 +1,279 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8"/>
+<meta name="viewport" content="width=device-width,initial-scale=1"/>
+<title>RoadWatch — Select Role</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link href="https://fonts.googleapis.com/css2?family=Bebas+Neue&family=DM+Sans:wght@300;400;500&family=Share+Tech+Mono&display=swap" rel="stylesheet">
+<style>
+*,*::before,*::after{box-sizing:border-box;margin:0;padding:0}
+:root{
+  --bg:#05080d;
+  --card:#0d1520;
+  --border:#1a2a3a;
+  --accent:#00e5ff;
+  --gold:#ffd600;
+  --warn:#ff6b35;
+  --text:#c8dcea;
+  --muted:#3d5a70;
+  --font-d:'Bebas Neue',cursive;
+  --font-b:'DM Sans',sans-serif;
+  --font-m:'Share Tech Mono',monospace;
+}
+html,body{height:100%;overflow:hidden}
+body{
+  background:var(--bg);
+  color:var(--text);
+  font-family:var(--font-b);
+  display:flex;flex-direction:column;
+  align-items:center;justify-content:center;
+  position:relative;
+}
+
+/* animated grid bg */
+.grid-bg{
+  position:fixed;inset:0;
+  background-image:
+    linear-gradient(rgba(0,229,255,0.03) 1px,transparent 1px),
+    linear-gradient(90deg,rgba(0,229,255,0.03) 1px,transparent 1px);
+  background-size:48px 48px;
+  animation:grid-drift 20s linear infinite;
+}
+@keyframes grid-drift{to{background-position:48px 48px}}
+
+/* radial glow */
+.glow-center{
+  position:fixed;
+  width:600px;height:600px;
+  left:50%;top:50%;
+  transform:translate(-50%,-50%);
+  background:radial-gradient(ellipse at center,rgba(0,229,255,0.06) 0%,transparent 70%);
+  pointer-events:none;
+}
+
+/* scanlines */
+body::after{
+  content:'';position:fixed;inset:0;
+  background:repeating-linear-gradient(0deg,transparent,transparent 3px,rgba(0,0,0,0.07) 3px,rgba(0,0,0,0.07) 4px);
+  pointer-events:none;z-index:999;
+}
+
+/* header */
+.header{
+  text-align:center;
+  margin-bottom:52px;
+  animation:fade-down .6s ease both;
+}
+@keyframes fade-down{from{opacity:0;transform:translateY(-20px)}to{opacity:1;transform:translateY(0)}}
+
+.brand{
+  font-family:var(--font-d);
+  font-size:72px;
+  letter-spacing:10px;
+  color:#fff;
+  line-height:1;
+}
+.brand span{color:var(--accent)}
+.tagline{
+  font-family:var(--font-m);
+  font-size:11px;
+  letter-spacing:4px;
+  color:var(--muted);
+  text-transform:uppercase;
+  margin-top:8px;
+}
+.live-chip{
+  display:inline-flex;align-items:center;gap:6px;
+  background:rgba(0,229,255,0.07);
+  border:1px solid rgba(0,229,255,0.2);
+  padding:4px 14px;
+  border-radius:0;
+  font-family:var(--font-m);
+  font-size:10px;
+  letter-spacing:2px;
+  color:var(--accent);
+  margin-top:14px;
+}
+.live-chip::before{
+  content:'';width:6px;height:6px;border-radius:50%;
+  background:var(--accent);
+  animation:blink 1s step-start infinite;
+}
+@keyframes blink{50%{opacity:0}}
+
+/* role cards */
+.cards{
+  display:flex;gap:20px;
+  animation:fade-up .7s ease .2s both;
+}
+@keyframes fade-up{from{opacity:0;transform:translateY(24px)}to{opacity:1;transform:translateY(0)}}
+
+.role-card{
+  width:240px;
+  background:var(--card);
+  border:1px solid var(--border);
+  padding:32px 24px 28px;
+  cursor:pointer;
+  position:relative;
+  overflow:hidden;
+  transition:border-color .25s,transform .25s;
+  text-decoration:none;
+  display:block;
+}
+.role-card::before{
+  content:'';
+  position:absolute;top:0;left:0;right:0;height:2px;
+  background:var(--role-color,var(--accent));
+  transform:scaleX(0);transform-origin:left;
+  transition:transform .3s ease;
+}
+.role-card:hover{border-color:var(--role-color,var(--accent));transform:translateY(-4px)}
+.role-card:hover::before{transform:scaleX(1)}
+.role-card.user-card  {--role-color:var(--accent)}
+.role-card.driver-card{--role-color:var(--gold)}
+.role-card.toll-card  {--role-color:var(--warn)}
+.role-card.admin-card {--role-color:#b39ddb}
+
+.role-icon{
+  width:52px;height:52px;
+  background:rgba(255,255,255,0.04);
+  border:1px solid var(--border);
+  display:flex;align-items:center;justify-content:center;
+  font-size:24px;
+  margin-bottom:20px;
+  transition:background .25s,border-color .25s;
+}
+.role-card:hover .role-icon{
+  background:rgba(255,255,255,0.07);
+  border-color:var(--role-color,var(--accent));
+}
+
+.role-name{
+  font-family:var(--font-d);
+  font-size:28px;
+  letter-spacing:3px;
+  color:#fff;
+  margin-bottom:6px;
+}
+.role-desc{
+  font-size:12px;
+  color:var(--muted);
+  line-height:1.6;
+  margin-bottom:20px;
+}
+.role-perms{
+  display:flex;flex-direction:column;gap:5px;
+}
+.perm{
+  font-family:var(--font-m);
+  font-size:10px;
+  color:var(--muted);
+  letter-spacing:1px;
+  display:flex;align-items:center;gap:7px;
+}
+.perm::before{
+  content:'▸';
+  color:var(--role-color,var(--accent));
+  font-size:10px;
+}
+
+.enter-arrow{
+  position:absolute;bottom:22px;right:22px;
+  font-family:var(--font-m);
+  font-size:11px;
+  color:var(--role-color,var(--accent));
+  opacity:0;
+  transition:opacity .2s,transform .2s;
+  transform:translateX(-6px);
+}
+.role-card:hover .enter-arrow{opacity:1;transform:translateX(0)}
+
+/* footer */
+.footer{
+  position:fixed;bottom:20px;
+  font-family:var(--font-m);
+  font-size:10px;
+  letter-spacing:2px;
+  color:var(--muted);
+  text-transform:uppercase;
+  animation:fade-up .7s ease .4s both;
+}
+</style>
+</head>
+<body>
+<div class="grid-bg"></div>
+<div class="glow-center"></div>
+
+<div class="header">
+  <div class="brand">Road<span>Watch</span></div>
+  <div class="tagline">Road Quality Monitoring System</div>
+  <div class="live-chip">System Online · Vijayawada Region</div>
+</div>
+
+<div class="cards">
+
+  <!-- USER -->
+  <a href="/user" class="role-card user-card" onclick="setRole('user')">
+    <div class="role-icon">🧑</div>
+    <div class="role-name">Citizen</div>
+    <div class="role-desc">Report road damage in your area using map or coordinates.</div>
+    <div class="role-perms">
+      <div class="perm">Report potholes on map</div>
+      <div class="perm">View nearby issues</div>
+      <div class="perm">Track report status</div>
+    </div>
+    <div class="enter-arrow">ENTER →</div>
+  </a>
+
+  <!-- DRIVER -->
+  <a href="/driver" class="role-card driver-card" onclick="setRole('driver')">
+    <div class="role-icon">🚛</div>
+    <div class="role-name">Driver</div>
+    <div class="role-desc">Get live proximity alerts and report road issues while on route.</div>
+    <div class="role-perms">
+      <div class="perm">Live pothole alerts</div>
+      <div class="perm">Auto GPS tracking</div>
+      <div class="perm">Report while driving</div>
+    </div>
+    <div class="enter-arrow">ENTER →</div>
+  </a>
+
+  <!-- TOLL PLAZA -->
+  <a href="/toll" class="role-card toll-card" onclick="setRole('toll')">
+    <div class="role-icon">🏛️</div>
+    <div class="role-name">Toll Plaza</div>
+    <div class="role-desc">Monitor all reports, verify CCTV detections, dispatch to transport dept.</div>
+    <div class="role-perms">
+      <div class="perm">All source reports</div>
+      <div class="perm">Forward to transport dept</div>
+      <div class="perm">PDF export + SMS sim</div>
+    </div>
+    <div class="enter-arrow">ENTER →</div>
+  </a>
+
+  <!-- ADMIN -->
+  <a href="/admin" class="role-card admin-card" onclick="setRole('admin')">
+    <div class="role-icon">⚙️</div>
+    <div class="role-name">Admin</div>
+    <div class="role-desc">Full system control — manage all records, resolve and delete potholes.</div>
+    <div class="role-perms">
+      <div class="perm">Full database access</div>
+      <div class="perm">Resolve &amp; delete records</div>
+      <div class="perm">Live map + table sync</div>
+    </div>
+    <div class="enter-arrow">ENTER →</div>
+  </a>
+
+</div>
+
+<div class="footer">IIT Madras Road Safety Hackathon 2026 · Team Road Riders</div>
+
+<script>
+function setRole(role){
+  sessionStorage.setItem('rw_role', role);
+}
+// If already set, we still let them re-select freely
+</script>
+</body>
+</html>

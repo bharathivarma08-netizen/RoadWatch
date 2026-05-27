@@ -1,0 +1,643 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8"/>
+<meta name="viewport" content="width=device-width,initial-scale=1"/>
+<title>RoadWatch — Toll Plaza Command Center</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link href="https://fonts.googleapis.com/css2?family=Barlow+Condensed:wght@300;400;600;700;900&family=DM+Sans:wght@300;400;500&family=Share+Tech+Mono&display=swap" rel="stylesheet">
+<link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css"/>
+<style>
+*,*::before,*::after{box-sizing:border-box;margin:0;padding:0}
+:root{
+  --bg:#07090c;
+  --surface:#0d1219;
+  --card:#111820;
+  --border:#1c2b3a;
+  --accent:#00bfff;
+  --warn:#ff6b35;
+  --high:#ff3040;
+  --medium:#ffaa00;
+  --low:#22dd88;
+  --forwarded:#b39ddb;
+  --text:#b8ccd8;
+  --muted:#3a5468;
+  --font-d:'Barlow Condensed',sans-serif;
+  --font-b:'DM Sans',sans-serif;
+  --font-m:'Share Tech Mono',monospace;
+}
+body{background:var(--bg);color:var(--text);font-family:var(--font-b);min-height:100vh;display:flex;flex-direction:column}
+
+/* scan */
+body::after{content:'';position:fixed;inset:0;
+  background:repeating-linear-gradient(0deg,transparent,transparent 2px,rgba(0,0,0,0.05) 2px,rgba(0,0,0,0.05) 4px);
+  pointer-events:none;z-index:9999}
+
+/* NAV */
+nav{
+  background:var(--surface);
+  border-bottom:1px solid var(--border);
+  padding:0 32px;height:58px;
+  display:flex;align-items:center;justify-content:space-between;
+  flex-shrink:0;
+}
+.nav-brand{font-family:var(--font-d);font-weight:900;font-size:22px;letter-spacing:4px;color:#fff}
+.nav-brand span{color:var(--accent)}
+.nav-center{display:flex;align-items:center;gap:24px}
+.nav-stat{text-align:center}
+.ns-val{font-family:var(--font-d);font-size:20px;font-weight:900;color:#fff}
+.ns-lbl{font-family:var(--font-m);font-size:9px;letter-spacing:2px;color:var(--muted)}
+.nav-role{font-family:var(--font-m);font-size:10px;letter-spacing:2px;color:var(--warn);
+  border:1px solid rgba(255,107,53,0.3);padding:3px 12px;background:rgba(255,107,53,0.05)}
+.nav-back{font-size:11px;color:var(--muted);text-decoration:none;font-family:var(--font-m);letter-spacing:1px;transition:color .2s}
+.nav-back:hover{color:var(--accent)}
+
+/* MAIN */
+.main-layout{flex:1;display:grid;grid-template-columns:1fr 480px;gap:0;overflow:hidden;height:calc(100vh - 58px)}
+
+/* MAP SECTION */
+.map-section{position:relative;overflow:hidden}
+#map{height:100%;width:100%}
+
+/* MAP OVERLAY STATS */
+.map-overlay{
+  position:absolute;top:16px;left:16px;z-index:50;
+  display:flex;flex-direction:column;gap:8px;
+}
+.ov-chip{
+  background:rgba(13,18,25,0.9);
+  border:1px solid var(--border);
+  padding:8px 14px;
+  backdrop-filter:blur(4px);
+  display:flex;align-items:center;gap:8px;
+}
+.ov-dot{width:8px;height:8px;border-radius:50%}
+.ov-text{font-family:var(--font-m);font-size:10px;letter-spacing:1.5px;color:var(--text)}
+.ov-count{font-family:var(--font-d);font-size:16px;font-weight:700;margin-left:auto}
+
+/* CCTV indicator */
+.cctv-badge{
+  position:absolute;bottom:16px;left:16px;z-index:50;
+  background:rgba(13,18,25,0.9);border:1px solid rgba(0,191,255,0.3);
+  padding:8px 16px;display:flex;align-items:center;gap:8px;
+  font-family:var(--font-m);font-size:10px;letter-spacing:2px;color:var(--accent);
+}
+.cctv-badge::before{
+  content:'';width:7px;height:7px;border-radius:50%;
+  background:var(--accent);animation:blink 1s step-start infinite;
+}
+@keyframes blink{50%{opacity:0}}
+
+/* RIGHT PANEL */
+.right-panel{
+  background:var(--surface);
+  border-left:1px solid var(--border);
+  display:flex;flex-direction:column;
+  overflow:hidden;
+}
+
+/* TABS */
+.tabs{
+  display:flex;border-bottom:1px solid var(--border);flex-shrink:0;
+}
+.tab{
+  flex:1;padding:14px 8px;
+  font-family:var(--font-d);font-weight:700;font-size:12px;
+  letter-spacing:2px;text-transform:uppercase;
+  color:var(--muted);background:transparent;border:none;
+  border-bottom:2px solid transparent;cursor:pointer;transition:all .2s;
+}
+.tab.active{color:var(--accent);border-bottom-color:var(--accent)}
+.tab:hover:not(.active){color:var(--text)}
+
+/* TAB CONTENT */
+.tab-content{display:none;flex:1;overflow:hidden;flex-direction:column}
+.tab-content.active{display:flex}
+
+/* REPORTS TAB */
+.reports-controls{
+  padding:12px 16px;border-bottom:1px solid var(--border);flex-shrink:0;
+  display:flex;gap:8px;align-items:center;
+}
+.filter-btn{
+  font-family:var(--font-m);font-size:9px;letter-spacing:1.5px;text-transform:uppercase;
+  padding:5px 12px;background:transparent;border:1px solid var(--border);
+  color:var(--muted);cursor:pointer;transition:all .2s;
+}
+.filter-btn.active{color:#000}
+.filter-btn[data-f="All"].active{background:var(--accent);border-color:var(--accent);color:#000}
+.filter-btn[data-f="High"].active{background:var(--high);border-color:var(--high);color:#fff}
+.filter-btn[data-f="Medium"].active{background:var(--medium);border-color:var(--medium);color:#000}
+.filter-btn[data-f="Low"].active{background:var(--low);border-color:var(--low);color:#000}
+.filter-btn[data-f="cctv"].active{background:var(--accent);border-color:var(--accent);color:#000}
+.filter-btn[data-f="user"].active{background:#7c4dff;border-color:#7c4dff;color:#fff}
+.filter-btn[data-f="driver"].active{background:var(--medium);border-color:var(--medium);color:#000}
+.btn-refresh{
+  margin-left:auto;font-family:var(--font-m);font-size:10px;letter-spacing:1px;
+  padding:5px 12px;background:transparent;border:1px solid var(--border);
+  color:var(--accent);cursor:pointer;transition:all .2s;
+}
+.btn-refresh:hover{background:rgba(0,191,255,0.1)}
+
+.reports-list{overflow-y:auto;flex:1;padding:8px}
+
+/* REPORT CARD */
+.report-card{
+  background:var(--card);border:1px solid var(--border);
+  padding:12px 14px;margin-bottom:8px;
+  transition:border-color .2s;
+  animation:card-in .3s ease both;
+}
+@keyframes card-in{from{opacity:0;transform:translateY(6px)}to{opacity:1;transform:none}}
+.report-card:hover{border-color:var(--accent)}
+.report-card.forwarded{opacity:0.5;border-style:dashed}
+
+.rc-top{display:flex;align-items:center;gap:8px;margin-bottom:8px}
+.sev-badge{
+  font-family:var(--font-m);font-size:9px;letter-spacing:1.5px;
+  padding:2px 9px;border:1px solid;
+}
+.sev-High{color:var(--high);border-color:var(--high);background:rgba(255,48,64,0.08)}
+.sev-Medium{color:var(--medium);border-color:var(--medium);background:rgba(255,170,0,0.08)}
+.sev-Low{color:var(--low);border-color:var(--low);background:rgba(34,221,136,0.08)}
+.sev-forwarded{color:var(--forwarded);border-color:var(--forwarded);background:rgba(179,157,219,0.08)}
+.src-badge{
+  font-family:var(--font-m);font-size:9px;letter-spacing:1px;
+  padding:2px 8px;border:1px solid var(--border);color:var(--muted);
+}
+.rc-id{font-family:var(--font-m);font-size:9px;color:var(--muted);margin-left:auto;max-width:90px;
+  overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+
+.rc-loc{font-family:var(--font-m);font-size:10px;color:var(--text);margin-bottom:4px}
+.rc-ts{font-family:var(--font-m);font-size:9px;color:var(--muted)}
+
+.rc-actions{display:flex;gap:6px;margin-top:10px}
+.btn-view{font-family:var(--font-m);font-size:9px;letter-spacing:1px;padding:4px 10px;
+  background:transparent;border:1px solid var(--border);color:var(--muted);cursor:pointer;transition:all .2s}
+.btn-view:hover{border-color:var(--accent);color:var(--accent)}
+.btn-forward{font-family:var(--font-m);font-size:9px;letter-spacing:1px;padding:4px 10px;
+  background:transparent;border:1px solid var(--warn);color:var(--warn);cursor:pointer;transition:all .2s}
+.btn-forward:hover{background:var(--warn);color:#000}
+.btn-forward:disabled{opacity:0.3;cursor:default}
+.btn-resolve-card{font-family:var(--font-m);font-size:9px;letter-spacing:1px;padding:4px 10px;
+  background:transparent;border:1px solid var(--low);color:var(--low);cursor:pointer;transition:all .2s}
+.btn-resolve-card:hover{background:var(--low);color:#000}
+.btn-resolve-card:disabled{opacity:0.3;cursor:default}
+
+/* ANALYTICS TAB */
+.analytics-content{padding:20px;overflow-y:auto;flex:1}
+.chart-block{margin-bottom:24px}
+.chart-title{font-family:var(--font-d);font-size:13px;letter-spacing:2px;font-weight:700;
+  color:var(--muted);text-transform:uppercase;margin-bottom:12px}
+.bar-row{display:flex;align-items:center;gap:10px;margin-bottom:8px}
+.bar-label{font-family:var(--font-m);font-size:10px;color:var(--text);width:60px;letter-spacing:1px}
+.bar-track{flex:1;height:20px;background:rgba(255,255,255,0.04);position:relative;overflow:hidden}
+.bar-fill{height:100%;transition:width .8s ease;min-width:2px}
+.bar-val{font-family:var(--font-m);font-size:10px;color:var(--muted);width:28px;text-align:right}
+
+/* DISPATCH TAB */
+.dispatch-content{padding:20px;overflow-y:auto;flex:1;display:flex;flex-direction:column;gap:16px}
+.dispatch-card{background:var(--card);border:1px solid var(--border);padding:16px}
+.dc-title{font-family:var(--font-d);font-size:14px;font-weight:700;letter-spacing:2px;text-transform:uppercase;
+  color:var(--text);margin-bottom:8px}
+.dc-sub{font-size:12px;color:var(--muted);line-height:1.5;margin-bottom:14px}
+.dispatch-btn{
+  width:100%;padding:12px;
+  font-family:var(--font-d);font-weight:700;font-size:14px;letter-spacing:3px;text-transform:uppercase;
+  border:1px solid;cursor:pointer;background:transparent;transition:all .2s;
+}
+.dispatch-btn.pdf{color:var(--accent);border-color:var(--accent)}
+.dispatch-btn.pdf:hover{background:var(--accent);color:#000}
+.dispatch-btn.sms{color:var(--low);border-color:var(--low);margin-top:8px}
+.dispatch-btn.sms:hover{background:var(--low);color:#000}
+.dispatch-btn.mark-all{color:var(--warn);border-color:var(--warn);margin-top:8px}
+.dispatch-btn.mark-all:hover{background:var(--warn);color:#000}
+
+.dispatch-log{background:rgba(0,0,0,0.3);border:1px solid var(--border);padding:12px;
+  font-family:var(--font-m);font-size:10px;color:var(--low);line-height:1.8;
+  max-height:180px;overflow-y:auto;letter-spacing:1px}
+
+/* TOAST */
+#toast{
+  position:fixed;bottom:24px;right:24px;
+  font-family:var(--font-m);font-size:11px;letter-spacing:1px;
+  padding:11px 20px;background:var(--card);
+  border-left:3px solid var(--accent);border:1px solid var(--border);border-left-width:3px;
+  color:var(--text);opacity:0;transform:translateX(12px);
+  transition:all .25s;pointer-events:none;z-index:9998;
+}
+#toast.show{opacity:1;transform:translateX(0)}
+#toast.success{border-left-color:var(--low)}
+#toast.error{border-left-color:var(--high)}
+
+/* MODAL */
+#modal-overlay{position:fixed;inset:0;background:rgba(0,0,0,0.75);
+  display:flex;align-items:center;justify-content:center;z-index:500;
+  opacity:0;pointer-events:none;transition:opacity .2s}
+#modal-overlay.visible{opacity:1;pointer-events:all}
+.modal{background:var(--card);border:1px solid var(--warn);padding:28px;max-width:440px;width:90%;transform:scale(.95);transition:transform .2s}
+#modal-overlay.visible .modal{transform:scale(1)}
+.modal-title{font-family:var(--font-d);font-size:18px;font-weight:900;letter-spacing:3px;
+  text-transform:uppercase;color:var(--warn);margin-bottom:12px}
+.modal-body{font-size:13px;color:var(--muted);line-height:1.6;margin-bottom:20px}
+.modal-detail{font-family:var(--font-m);font-size:11px;color:var(--text);
+  padding:10px;background:rgba(255,107,53,0.06);border:1px solid rgba(255,107,53,0.15);
+  margin-bottom:20px;word-break:break-all;line-height:1.8}
+.modal-actions{display:flex;gap:10px;justify-content:flex-end}
+.btn-cancel{font-family:var(--font-d);font-size:12px;letter-spacing:2px;text-transform:uppercase;
+  padding:8px 20px;border:1px solid var(--border);color:var(--muted);background:transparent;cursor:pointer;transition:all .2s}
+.btn-cancel:hover{border-color:var(--text);color:var(--text)}
+.btn-confirm{font-family:var(--font-d);font-size:12px;letter-spacing:2px;text-transform:uppercase;
+  padding:8px 20px;border:1px solid var(--warn);color:var(--warn);background:transparent;cursor:pointer;transition:all .2s}
+.btn-confirm:hover{background:var(--warn);color:#000}
+</style>
+</head>
+<body>
+
+<nav>
+  <div class="nav-brand">Road<span>Watch</span></div>
+  <div class="nav-center">
+    <div class="nav-stat"><div class="ns-val" id="nsTotal">—</div><div class="ns-lbl">Total</div></div>
+    <div class="nav-stat"><div class="ns-val" id="nsHigh" style="color:var(--high)">—</div><div class="ns-lbl">High</div></div>
+    <div class="nav-stat"><div class="ns-val" id="nsCctv" style="color:var(--accent)">—</div><div class="ns-lbl">CCTV</div></div>
+    <div class="nav-stat"><div class="ns-val" id="nsFwd" style="color:var(--forwarded)">—</div><div class="ns-lbl">Forwarded</div></div>
+  </div>
+  <div style="display:flex;align-items:center;gap:16px">
+    <div class="nav-role">🏛 TOLL PLAZA</div>
+    <a href="/" class="nav-back">← Switch Role</a>
+  </div>
+</nav>
+
+<div class="main-layout">
+  <!-- MAP -->
+  <div class="map-section">
+    <div id="map"></div>
+    <div class="map-overlay">
+      <div class="ov-chip">
+        <div class="ov-dot" style="background:var(--high)"></div>
+        <div class="ov-text">HIGH</div>
+        <div class="ov-count" style="color:var(--high)" id="ovHigh">0</div>
+      </div>
+      <div class="ov-chip">
+        <div class="ov-dot" style="background:var(--medium)"></div>
+        <div class="ov-text">MEDIUM</div>
+        <div class="ov-count" style="color:var(--medium)" id="ovMedium">0</div>
+      </div>
+      <div class="ov-chip">
+        <div class="ov-dot" style="background:var(--low)"></div>
+        <div class="ov-text">LOW</div>
+        <div class="ov-count" style="color:var(--low)" id="ovLow">0</div>
+      </div>
+    </div>
+    <div class="cctv-badge">CCTV FEED ACTIVE — detect.py monitoring</div>
+  </div>
+
+  <!-- RIGHT PANEL -->
+  <div class="right-panel">
+    <div class="tabs">
+      <button class="tab active" onclick="switchTab('reports',this)">Reports</button>
+      <button class="tab" onclick="switchTab('analytics',this)">Analytics</button>
+      <button class="tab" onclick="switchTab('dispatch',this)">Dispatch</button>
+    </div>
+
+    <!-- REPORTS TAB -->
+    <div class="tab-content active" id="tab-reports">
+      <div class="reports-controls">
+        <button class="filter-btn active" data-f="All" onclick="setFilter('All',this)">All</button>
+        <button class="filter-btn" data-f="High" onclick="setFilter('High',this)">High</button>
+        <button class="filter-btn" data-f="Medium" onclick="setFilter('Medium',this)">Med</button>
+        <button class="filter-btn" data-f="Low" onclick="setFilter('Low',this)">Low</button>
+        <button class="filter-btn" data-f="cctv" onclick="setFilter('cctv',this)">CCTV</button>
+        <button class="filter-btn" data-f="user" onclick="setFilter('user',this)">User</button>
+        <button class="filter-btn" data-f="driver" onclick="setFilter('driver',this)">Driver</button>
+        <button class="btn-refresh" onclick="loadData()">↺</button>
+      </div>
+      <div class="reports-list" id="reportsList">
+        <div style="padding:30px;text-align:center;font-family:var(--font-m);font-size:11px;color:var(--muted)">
+          Loading…
+        </div>
+      </div>
+    </div>
+
+    <!-- ANALYTICS TAB -->
+    <div class="tab-content" id="tab-analytics">
+      <div class="analytics-content">
+        <div class="chart-block">
+          <div class="chart-title">By Severity</div>
+          <div id="chartSeverity"></div>
+        </div>
+        <div class="chart-block">
+          <div class="chart-title">By Source</div>
+          <div id="chartSource"></div>
+        </div>
+        <div class="chart-block">
+          <div class="chart-title">Status Breakdown</div>
+          <div id="chartStatus"></div>
+        </div>
+      </div>
+    </div>
+
+    <!-- DISPATCH TAB -->
+    <div class="tab-content" id="tab-dispatch">
+      <div class="dispatch-content">
+        <div class="dispatch-card">
+          <div class="dc-title">📋 PDF Report</div>
+          <div class="dc-sub">Generate a full incident report of all active High and Medium severity potholes to email to the road transport department.</div>
+          <button class="dispatch-btn pdf" onclick="generatePDF()">⬇ Download PDF Report</button>
+        </div>
+        <div class="dispatch-card">
+          <div class="dc-title">📱 SMS / Email Alert</div>
+          <div class="dc-sub">Simulate sending an alert to the Regional Road Transport Officer with count and GPS coordinates of critical potholes.</div>
+          <button class="dispatch-btn sms" onclick="simulateSMS()">📤 Send Alert to RTO</button>
+        </div>
+        <div class="dispatch-card">
+          <div class="dc-title">✅ Mark All Forwarded</div>
+          <div class="dc-sub">Mark all currently active High-severity potholes as 'forwarded' to indicate they have been dispatched to transport authority.</div>
+          <button class="dispatch-btn mark-all" onclick="markAllForwarded()">Mark High Priority as Forwarded</button>
+        </div>
+        <div class="dispatch-card">
+          <div class="dc-title">Dispatch Log</div>
+          <div class="dispatch-log" id="dispatchLog">-- Dispatch log ready --<br></div>
+        </div>
+      </div>
+    </div>
+  </div>
+</div>
+
+<!-- FORWARD CONFIRM MODAL -->
+<div id="modal-overlay">
+  <div class="modal">
+    <div class="modal-title">Forward to Transport Dept?</div>
+    <div class="modal-body">This will mark the pothole as forwarded and log the dispatch. The following record will be flagged for road repair:</div>
+    <div class="modal-detail" id="modalDetail"></div>
+    <div class="modal-actions">
+      <button class="btn-cancel" onclick="closeModal()">Cancel</button>
+      <button class="btn-confirm" onclick="confirmForward()">Confirm & Forward</button>
+    </div>
+  </div>
+</div>
+
+<div id="toast"></div>
+
+<script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"></script>
+<script>
+let allData = [];
+let currentFilter = 'All';
+let mapMarkers = {};
+let forwardTarget = null;
+
+const map = L.map('map').setView([16.5062,80.6480],13);
+L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png',{attribution:'© OSM'}).addTo(map);
+
+// ── LOAD ──
+async function loadData(){
+  try{
+    const res  = await fetch('/potholes');
+    const data = await res.json();
+    allData = Array.isArray(data)?data:(data.potholes||[]);
+  }catch{
+    allData = getDemoData();
+    showToast('Demo mode — Flask not running','info');
+  }
+  updateNav();
+  renderMap();
+  renderReports();
+  renderAnalytics();
+}
+
+function getDemoData(){
+  return [
+    {id:'d1',latitude:16.508, longitude:80.649, severity:'High',  source:'cctv',  status:'active',   confirmed_count:4, timestamp:new Date(Date.now()-3600000).toISOString()},
+    {id:'d2',latitude:16.504, longitude:80.647, severity:'Medium',source:'user',  status:'active',   confirmed_count:2, timestamp:new Date(Date.now()-7200000).toISOString()},
+    {id:'d3',latitude:16.506, longitude:80.651, severity:'Low',   source:'manual',status:'active',   confirmed_count:1, timestamp:new Date(Date.now()-1800000).toISOString()},
+    {id:'d4',latitude:16.509, longitude:80.645, severity:'High',  source:'cctv',  status:'forwarded',confirmed_count:5, timestamp:new Date(Date.now()-10800000).toISOString()},
+    {id:'d5',latitude:16.502, longitude:80.652, severity:'Medium',source:'driver',status:'active',   confirmed_count:2, timestamp:new Date(Date.now()-900000).toISOString()},
+    {id:'d6',latitude:16.511, longitude:80.648, severity:'High',  source:'cctv',  status:'active',   confirmed_count:3, timestamp:new Date(Date.now()-600000).toISOString()},
+    {id:'d7',latitude:16.500, longitude:80.643, severity:'Low',   source:'user',  status:'resolved', confirmed_count:1, timestamp:new Date(Date.now()-86400000).toISOString()},
+  ];
+}
+
+// ── NAV STATS ──
+function updateNav(){
+  document.getElementById('nsTotal').textContent = allData.length;
+  document.getElementById('nsHigh').textContent  = allData.filter(p=>p.severity==='High').length;
+  document.getElementById('nsCctv').textContent  = allData.filter(p=>p.source==='cctv').length;
+  document.getElementById('nsFwd').textContent   = allData.filter(p=>p.status==='forwarded').length;
+  document.getElementById('ovHigh').textContent  = allData.filter(p=>p.severity==='High'&&p.status==='active').length;
+  document.getElementById('ovMedium').textContent= allData.filter(p=>p.severity==='Medium'&&p.status==='active').length;
+  document.getElementById('ovLow').textContent   = allData.filter(p=>p.severity==='Low'&&p.status==='active').length;
+}
+
+// ── MAP ──
+function renderMap(){
+  Object.values(mapMarkers).forEach(m=>map.removeLayer(m));
+  mapMarkers = {};
+  allData.forEach(p=>{
+    if(p.status==='resolved') return;
+    const color = p.status==='forwarded'?'#b39ddb':p.severity==='High'?'#ff3040':p.severity==='Medium'?'#ffaa00':'#22dd88';
+    const r = p.severity==='High'?13:p.severity==='Medium'?10:7;
+    const m = L.circleMarker([p.latitude,p.longitude],{
+      radius:r, color, fillColor:color,
+      fillOpacity: p.source==='cctv'?0.6:0.35, weight:2
+    }).addTo(map)
+      .bindPopup(`<b>${p.severity}</b> — ${p.source}<br>
+        Status: ${p.status}<br>Confirmed: ${p.confirmed_count||1}<br>
+        <small>${p.timestamp?new Date(p.timestamp).toLocaleString():''}</small>`);
+    mapMarkers[p.id] = m;
+  });
+}
+
+// ── REPORTS LIST ──
+function setFilter(f, btn){
+  currentFilter = f;
+  document.querySelectorAll('.filter-btn').forEach(b=>b.classList.remove('active'));
+  btn.classList.add('active');
+  renderReports();
+}
+
+function renderReports(){
+  let rows = [...allData];
+  if(currentFilter==='High'||currentFilter==='Medium'||currentFilter==='Low')
+    rows = rows.filter(p=>p.severity===currentFilter);
+  else if(['cctv','user','driver','manual'].includes(currentFilter))
+    rows = rows.filter(p=>p.source===currentFilter);
+
+  // Sort: High first, then by timestamp
+  rows.sort((a,b)=>{
+    const so={High:3,Medium:2,Low:1};
+    return so[b.severity]-so[a.severity]||(new Date(b.timestamp)-new Date(a.timestamp));
+  });
+
+  const list = document.getElementById('reportsList');
+  if(!rows.length){
+    list.innerHTML='<div style="padding:30px;text-align:center;font-family:var(--font-m);font-size:11px;color:var(--muted)">No records match filter</div>';
+    return;
+  }
+  list.innerHTML = rows.map((p,i)=>{
+    const ts  = p.timestamp?new Date(p.timestamp).toLocaleString('en-IN',{day:'2-digit',month:'short',hour:'2-digit',minute:'2-digit'}):'—';
+    const fwd = p.status==='forwarded';
+    const res = p.status==='resolved';
+    return `
+    <div class="report-card ${fwd?'forwarded':''}" style="animation-delay:${i*25}ms">
+      <div class="rc-top">
+        <span class="sev-badge sev-${fwd?'forwarded':p.severity}">${fwd?'FORWARDED':p.severity}</span>
+        <span class="src-badge">${p.source||'manual'}</span>
+        <span class="rc-id" title="${p.id}">${(p.id||'').slice(0,12)}</span>
+      </div>
+      <div class="rc-loc">📍 ${(p.latitude||0).toFixed(4)}, ${(p.longitude||0).toFixed(4)}</div>
+      <div class="rc-ts">${ts} · Confirmed: ${p.confirmed_count||1}</div>
+      <div class="rc-actions">
+        <button class="btn-view" onclick="focusMap('${p.id}',${p.latitude},${p.longitude})">🗺 View</button>
+        <button class="btn-forward" onclick="promptForward('${p.id}')" ${fwd||res?'disabled':''}>
+          ${fwd?'✓ Sent':'📤 Forward'}
+        </button>
+        <button class="btn-resolve-card" onclick="resolveCard('${p.id}')" ${res?'disabled':''}>
+          ${res?'✓ Done':'✅ Resolve'}
+        </button>
+      </div>
+    </div>`;
+  }).join('');
+}
+
+function focusMap(id, lat, lng){
+  map.setView([lat,lng],17);
+  if(mapMarkers[id]) mapMarkers[id].openPopup();
+}
+
+// ── FORWARD ──
+function promptForward(id){
+  const p = allData.find(x=>x.id===id); if(!p) return;
+  forwardTarget = id;
+  document.getElementById('modalDetail').innerHTML =
+    `ID: ${p.id}<br>Severity: ${p.severity}<br>Source: ${p.source}<br>
+     Coords: ${(p.latitude||0).toFixed(5)}, ${(p.longitude||0).toFixed(5)}<br>
+     Confirmed: ${p.confirmed_count||1}`;
+  document.getElementById('modal-overlay').classList.add('visible');
+}
+
+async function confirmForward(){
+  closeModal();
+  if(!forwardTarget) return;
+  try{
+    await fetch('/resolve',{
+      method:'POST',headers:{'Content-Type':'application/json'},
+      body:JSON.stringify({id:forwardTarget, status:'forwarded'})
+    });
+  }catch{}
+  const p = allData.find(x=>x.id===forwardTarget);
+  if(p){p.status='forwarded'; logDispatch(`FORWARDED → ${forwardTarget.slice(0,12)} [${p.severity}]`);}
+  updateNav(); renderMap(); renderReports();
+  showToast('Forwarded to Road Transport ✓','success');
+  forwardTarget = null;
+}
+
+// ── RESOLVE ──
+async function resolveCard(id){
+  try{
+    await fetch('/resolve',{
+      method:'POST',headers:{'Content-Type':'application/json'},
+      body:JSON.stringify({id})
+    });
+  }catch{}
+  const p = allData.find(x=>x.id===id);
+  if(p) p.status='resolved';
+
+  // Remove from map immediately
+  if(mapMarkers[id]){map.removeLayer(mapMarkers[id]);delete mapMarkers[id];}
+
+  updateNav(); renderReports(); renderAnalytics();
+  showToast('Marked as resolved ✓','success');
+}
+
+// ── ANALYTICS ──
+function renderAnalytics(){
+  const sevCounts = {High:0,Medium:0,Low:0};
+  const srcCounts = {};
+  const statCounts= {};
+  allData.forEach(p=>{
+    if(sevCounts[p.severity]!==undefined) sevCounts[p.severity]++;
+    srcCounts[p.source||'manual'] = (srcCounts[p.source||'manual']||0)+1;
+    statCounts[p.status||'active']= (statCounts[p.status||'active']||0)+1;
+  });
+  const total = allData.length||1;
+
+  const makeBars = (obj, colors) => Object.entries(obj).map(([k,v])=>`
+    <div class="bar-row">
+      <div class="bar-label">${k}</div>
+      <div class="bar-track">
+        <div class="bar-fill" style="width:${(v/total*100).toFixed(1)}%;background:${colors[k]||'var(--accent)'}"></div>
+      </div>
+      <div class="bar-val">${v}</div>
+    </div>`).join('');
+
+  document.getElementById('chartSeverity').innerHTML = makeBars(sevCounts,
+    {High:'var(--high)',Medium:'var(--medium)',Low:'var(--low)'});
+  document.getElementById('chartSource').innerHTML = makeBars(srcCounts,
+    {cctv:'var(--accent)',user:'#7c4dff',driver:'var(--medium)',manual:'var(--muted)'});
+  document.getElementById('chartStatus').innerHTML = makeBars(statCounts,
+    {active:'var(--accent)',resolved:'var(--low)',forwarded:'var(--forwarded)'});
+}
+
+// ── DISPATCH ──
+function generatePDF(){
+  const critical = allData.filter(p=>['High','Medium'].includes(p.severity)&&p.status==='active');
+  const lines = critical.map(p=>`${p.severity.padEnd(8)} | ${(p.latitude||0).toFixed(4)}, ${(p.longitude||0).toFixed(4)} | ${p.source} | ${p.confirmed_count||1} confirms`);
+  const content = `ROADWATCH — POTHOLE INCIDENT REPORT\nGenerated: ${new Date().toLocaleString()}\nRegion: Vijayawada\n\n${'─'.repeat(70)}\nSEVERITY | COORDINATES           | SOURCE | CONFIRMS\n${'─'.repeat(70)}\n${lines.join('\n')}\n${'─'.repeat(70)}\nTotal critical potholes: ${critical.length}\nGenerated by: RoadWatch System — Team Road Riders`;
+  const blob = new Blob([content],{type:'text/plain'});
+  const a = document.createElement('a'); a.href=URL.createObjectURL(blob);
+  a.download=`RoadWatch_Report_${new Date().toISOString().slice(0,10)}.txt`; a.click();
+  logDispatch(`PDF REPORT downloaded — ${critical.length} critical potholes`);
+  showToast('PDF report downloaded ✓','success');
+}
+
+function simulateSMS(){
+  const high = allData.filter(p=>p.severity==='High'&&p.status==='active');
+  const msg  = `[RoadWatch Alert]\n${high.length} HIGH severity potholes detected in Vijayawada region.\nImmediate repair required.\nRegion: Vijayawada\nGenerated: ${new Date().toLocaleString()}`;
+  logDispatch(`SMS/EMAIL SENT → RTO Vijayawada | ${high.length} High severity alerts`);
+  showToast(`Alert sent to RTO — ${high.length} critical potholes ✓`,'success');
+  alert('📱 Simulated SMS/Email:\n\n'+msg);
+}
+
+async function markAllForwarded(){
+  const targets = allData.filter(p=>p.severity==='High'&&p.status==='active');
+  for(const p of targets){
+    try{await fetch('/resolve',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({id:p.id,status:'forwarded'})})}catch{}
+    p.status='forwarded';
+  }
+  logDispatch(`BATCH FORWARD — ${targets.length} High-priority potholes forwarded`);
+  updateNav(); renderMap(); renderReports();
+  showToast(`${targets.length} records forwarded to transport dept ✓`,'success');
+}
+
+function logDispatch(msg){
+  const log = document.getElementById('dispatchLog');
+  const ts  = new Date().toLocaleTimeString('en-IN');
+  log.innerHTML += `[${ts}] ${msg}<br>`;
+  log.scrollTop = log.scrollHeight;
+}
+
+// ── MODAL ──
+function closeModal(){ document.getElementById('modal-overlay').classList.remove('visible'); }
+document.getElementById('modal-overlay').addEventListener('click',e=>{if(e.target.id==='modal-overlay')closeModal()});
+
+// ── TABS ──
+function switchTab(id, btn){
+  document.querySelectorAll('.tab').forEach(t=>t.classList.remove('active'));
+  document.querySelectorAll('.tab-content').forEach(t=>t.classList.remove('active'));
+  btn.classList.add('active');
+  document.getElementById('tab-'+id).classList.add('active');
+}
+
+// ── TOAST ──
+function showToast(msg,type='info'){
+  const t=document.getElementById('toast');
+  t.textContent=msg;t.className='show '+(type||'');
+  setTimeout(()=>t.className='',3200);
+}
+
+// ── INIT ──
+loadData();
+setInterval(loadData, 30000);
+</script>
+</body>
+</html>

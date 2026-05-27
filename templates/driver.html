@@ -1,0 +1,545 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8"/>
+<meta name="viewport" content="width=device-width,initial-scale=1"/>
+<title>RoadWatch — Driver Portal</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link href="https://fonts.googleapis.com/css2?family=Orbitron:wght@400;700;900&family=DM+Sans:wght@300;400;500&family=Share+Tech+Mono&display=swap" rel="stylesheet">
+<link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css"/>
+<style>
+*,*::before,*::after{box-sizing:border-box;margin:0;padding:0}
+:root{
+  --bg:#080c10;
+  --surface:#0e1520;
+  --border:#1a2a3a;
+  --accent:#00e5ff;
+  --gold:#ffd600;
+  --high:#ff1744;
+  --medium:#ff9100;
+  --low:#00e676;
+  --text:#c8dcea;
+  --muted:#3d5a70;
+  --font-d:'Orbitron',monospace;
+  --font-b:'DM Sans',sans-serif;
+  --font-m:'Share Tech Mono',monospace;
+}
+body{background:var(--bg);color:var(--text);font-family:var(--font-b);height:100vh;overflow:hidden;display:flex;flex-direction:column}
+
+/* SCANLINES */
+body::after{
+  content:'';position:fixed;inset:0;
+  background:repeating-linear-gradient(0deg,transparent,transparent 3px,rgba(0,0,0,0.06) 3px,rgba(0,0,0,0.06) 4px);
+  pointer-events:none;z-index:9999;
+}
+
+/* NAV */
+nav{
+  background:var(--surface);
+  border-bottom:1px solid var(--border);
+  padding:0 24px;
+  height:56px;display:flex;align-items:center;justify-content:space-between;
+  flex-shrink:0;z-index:100;
+}
+.nav-brand{font-family:var(--font-d);font-size:16px;letter-spacing:3px;color:var(--accent)}
+.nav-role{font-family:var(--font-m);font-size:10px;letter-spacing:3px;color:var(--gold);
+  border:1px solid rgba(255,214,0,0.3);padding:3px 12px;background:rgba(255,214,0,0.05)}
+.nav-back{font-size:11px;color:var(--muted);text-decoration:none;font-family:var(--font-m);
+  letter-spacing:1px;transition:color .2s}
+.nav-back:hover{color:var(--accent)}
+
+/* MAIN LAYOUT */
+.main{flex:1;display:grid;grid-template-columns:320px 1fr;overflow:hidden}
+
+/* SIDEBAR */
+.sidebar{
+  background:var(--surface);
+  border-right:1px solid var(--border);
+  overflow-y:auto;
+  display:flex;flex-direction:column;
+}
+
+/* ALERT BANNER */
+.alert-banner{
+  padding:16px 20px;
+  border-bottom:1px solid var(--border);
+  background:var(--alert-bg,rgba(0,230,118,0.06));
+  border-left:3px solid var(--alert-color,var(--low));
+  transition:all .4s;
+}
+.alert-level{
+  font-family:var(--font-d);font-size:11px;letter-spacing:3px;
+  color:var(--alert-color,var(--low));margin-bottom:4px;
+  display:flex;align-items:center;gap:8px;
+}
+.alert-level::before{
+  content:'';width:7px;height:7px;border-radius:50%;
+  background:var(--alert-color,var(--low));
+  animation:pulse 1s ease-in-out infinite;
+}
+@keyframes pulse{0%,100%{transform:scale(1);opacity:1}50%{transform:scale(1.4);opacity:0.7}}
+.alert-msg{font-size:12px;color:var(--text);line-height:1.5}
+.alert-dist{font-family:var(--font-m);font-size:10px;color:var(--muted);margin-top:4px}
+
+/* TRACKING STATUS */
+.track-status{
+  padding:14px 20px;
+  border-bottom:1px solid var(--border);
+  display:flex;align-items:center;gap:12px;
+}
+.track-dot{
+  width:10px;height:10px;border-radius:50%;
+  background:var(--low);flex-shrink:0;
+}
+.track-dot.off{background:var(--muted);animation:none!important}
+.track-dot{animation:pulse 1.5s ease-in-out infinite}
+.track-info{flex:1}
+.track-label{font-family:var(--font-m);font-size:10px;letter-spacing:2px;color:var(--muted);text-transform:uppercase}
+.track-coords{font-family:var(--font-m);font-size:11px;color:var(--text);margin-top:3px}
+
+.btn-track{
+  font-family:var(--font-d);font-size:10px;letter-spacing:1px;
+  padding:7px 14px;border:1px solid;cursor:pointer;
+  background:transparent;transition:all .2s;
+}
+.btn-track.start{color:var(--low);border-color:var(--low)}
+.btn-track.start:hover{background:var(--low);color:#000}
+.btn-track.stop{color:var(--high);border-color:var(--high)}
+.btn-track.stop:hover{background:var(--high);color:#fff}
+
+/* NEARBY POTHOLES */
+.nearby-head{
+  padding:14px 20px 10px;
+  font-family:var(--font-m);font-size:10px;letter-spacing:2px;
+  color:var(--muted);text-transform:uppercase;
+  border-bottom:1px solid var(--border);
+}
+.nearby-list{padding:8px 0;flex:1}
+.nearby-item{
+  padding:10px 20px;
+  border-bottom:1px solid rgba(26,42,58,0.5);
+  display:flex;align-items:center;gap:12px;
+  cursor:pointer;transition:background .15s;
+}
+.nearby-item:hover{background:rgba(0,229,255,0.04)}
+.ni-dot{width:10px;height:10px;border-radius:50%;flex-shrink:0}
+.ni-info{flex:1;min-width:0}
+.ni-dist{font-family:var(--font-d);font-size:11px;color:var(--text)}
+.ni-sev{font-family:var(--font-m);font-size:9px;letter-spacing:1.5px;margin-top:2px}
+.ni-sev.High{color:var(--high)} .ni-sev.Medium{color:var(--medium)} .ni-sev.Low{color:var(--low)}
+.ni-src{font-family:var(--font-m);font-size:9px;color:var(--muted);margin-top:1px}
+
+/* REPORT FORM */
+.report-form{
+  padding:16px 20px;
+  border-top:1px solid var(--border);
+  background:rgba(0,229,255,0.02);
+}
+.form-head{
+  font-family:var(--font-m);font-size:10px;letter-spacing:2px;
+  color:var(--muted);text-transform:uppercase;margin-bottom:14px;
+  display:flex;align-items:center;gap:8px;
+}
+.form-head::before{content:'';width:3px;height:12px;background:var(--gold)}
+.field{margin-bottom:10px}
+.field label{display:block;font-size:10px;letter-spacing:1.5px;text-transform:uppercase;color:var(--muted);margin-bottom:5px}
+.field input,.field select{
+  width:100%;padding:8px 12px;
+  background:rgba(255,255,255,0.04);border:1px solid var(--border);
+  color:var(--text);font-family:var(--font-b);font-size:12px;
+  outline:none;transition:border-color .2s;
+}
+.field input:focus,.field select:focus{border-color:var(--accent)}
+.coord-row{display:grid;grid-template-columns:1fr 1fr;gap:8px}
+.btn-use-gps{
+  width:100%;padding:8px;margin-bottom:10px;
+  background:rgba(0,229,255,0.07);border:1px solid rgba(0,229,255,0.2);
+  color:var(--accent);font-family:var(--font-m);font-size:10px;
+  letter-spacing:2px;text-transform:uppercase;cursor:pointer;transition:all .2s;
+}
+.btn-use-gps:hover{background:rgba(0,229,255,0.15)}
+.btn-submit{
+  width:100%;padding:11px;
+  background:var(--gold);border:none;color:#000;
+  font-family:var(--font-d);font-size:12px;letter-spacing:2px;text-transform:uppercase;
+  cursor:pointer;transition:all .2s;
+}
+.btn-submit:hover{background:#e6c200;transform:translateY(-1px)}
+
+/* HUD OVERLAYS */
+.speed-hud{
+  position:absolute;top:16px;right:16px;
+  background:rgba(14,21,32,0.9);
+  border:1px solid var(--border);
+  padding:14px 18px;z-index:50;backdrop-filter:blur(4px);
+}
+.hud-label{font-family:var(--font-m);font-size:9px;letter-spacing:2px;color:var(--muted)}
+.hud-val{font-family:var(--font-d);font-size:32px;color:var(--accent);line-height:1}
+.hud-unit{font-family:var(--font-m);font-size:9px;color:var(--muted)}
+
+/* ALERT FLASH OVERLAY */
+#alertFlash{
+  position:absolute;inset:0;pointer-events:none;z-index:400;
+  opacity:0;transition:opacity .1s;
+}
+#alertFlash.flash-high{background:rgba(255,23,68,0.15);animation:flash-anim .5s 3}
+#alertFlash.flash-medium{background:rgba(255,145,0,0.1);animation:flash-anim .6s 2}
+@keyframes flash-anim{0%,100%{opacity:0}50%{opacity:1}}
+
+/* MAP */
+#map-wrap{flex:1;position:relative;overflow:hidden}
+#map{height:100%;width:100%}
+
+/* AUDIO WARNING */
+.audio-note{
+  position:absolute;bottom:16px;left:50%;transform:translateX(-50%);
+  font-family:var(--font-m);font-size:10px;letter-spacing:1px;color:var(--muted);
+  background:rgba(14,21,32,0.85);padding:6px 14px;border:1px solid var(--border);
+  z-index:50;pointer-events:none;
+}
+</style>
+</head>
+<body>
+
+<nav>
+  <div class="nav-brand">RoadWatch</div>
+  <div class="nav-role">⚡ DRIVER MODE</div>
+  <a href="/" class="nav-back">← Switch Role</a>
+</nav>
+
+<div class="main">
+  <!-- SIDEBAR -->
+  <div class="sidebar">
+
+    <!-- ALERT BANNER -->
+    <div class="alert-banner" id="alertBanner">
+      <div class="alert-level" id="alertLevel">ALL CLEAR</div>
+      <div class="alert-msg" id="alertMsg">No potholes detected within 300m of your position.</div>
+      <div class="alert-dist" id="alertDist">Start tracking to enable proximity alerts.</div>
+    </div>
+
+    <!-- TRACKING STATUS -->
+    <div class="track-status">
+      <div class="track-dot off" id="trackDot"></div>
+      <div class="track-info">
+        <div class="track-label">GPS Status</div>
+        <div class="track-coords" id="trackCoords">Not tracking</div>
+      </div>
+      <button class="btn-track start" id="btnTrack" onclick="toggleTracking()">START</button>
+    </div>
+
+    <!-- NEARBY LIST -->
+    <div class="nearby-head">Nearby Potholes <span id="nearbyCount" style="color:var(--accent)">(0)</span></div>
+    <div class="nearby-list" id="nearbyList">
+      <div style="padding:20px;font-family:var(--font-m);font-size:11px;color:var(--muted);text-align:center">
+        Enable tracking to see nearby potholes
+      </div>
+    </div>
+
+    <!-- REPORT FORM -->
+    <div class="report-form">
+      <div class="form-head">Report a Pothole</div>
+      <button class="btn-use-gps" onclick="useGPSForReport()">📍 Use My GPS Location</button>
+      <div class="coord-row">
+        <div class="field"><label>Latitude</label>
+          <input type="number" id="rLat" placeholder="16.5062" step="0.0001"/>
+        </div>
+        <div class="field"><label>Longitude</label>
+          <input type="number" id="rLng" placeholder="80.6480" step="0.0001"/>
+        </div>
+      </div>
+      <div class="field"><label>Severity</label>
+        <select id="rSev">
+          <option value="Low">Low</option>
+          <option value="Medium" selected>Medium</option>
+          <option value="High">High</option>
+        </select>
+      </div>
+      <button class="btn-submit" onclick="submitDriverReport()">⚠ Report</button>
+    </div>
+  </div>
+
+  <!-- MAP AREA -->
+  <div id="map-wrap">
+    <div id="map"></div>
+    <div id="alertFlash"></div>
+
+    <!-- SPEED HUD -->
+    <div class="speed-hud">
+      <div class="hud-label">SPEED</div>
+      <div class="hud-val" id="speedVal">—</div>
+      <div class="hud-unit">km/h</div>
+    </div>
+
+    <div class="audio-note" id="audioNote">🔊 Proximity alerts active when tracking is ON</div>
+  </div>
+</div>
+
+<script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"></script>
+<script>
+// ── MAP ──
+const map = L.map('map').setView([16.5062,80.6480],14);
+L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png',{attribution:'© OSM'}).addTo(map);
+
+// ── STATE ──
+let allPotholes = [];
+let myMarker    = null;
+let myPos       = null;
+let watchId     = null;
+let isTracking  = false;
+let lastAlertId = null;
+let potholeMarkers = {};  // id → marker
+const ALERT_RADIUS_M = 300;
+
+// ── LOAD POTHOLES ──
+async function loadPotholes(){
+  try{
+    const res  = await fetch('/potholes');
+    const data = await res.json();
+    allPotholes = (Array.isArray(data)?data:(data.potholes||[])).filter(p=>p.status!=='resolved');
+    renderPotholeMarkers();
+    if(myPos) checkProximity(myPos.lat, myPos.lng);
+  }catch(e){console.warn('Flask not running — using demo data');loadDemoData()}
+}
+
+function loadDemoData(){
+  allPotholes = [
+    {id:'demo1',latitude:16.5080,longitude:80.6490,severity:'High',  status:'active',source:'cctv',timestamp:new Date().toISOString(),confirmed_count:3},
+    {id:'demo2',latitude:16.5040,longitude:80.6470,severity:'Medium',status:'active',source:'user',timestamp:new Date().toISOString(),confirmed_count:1},
+    {id:'demo3',latitude:16.5065,longitude:80.6510,severity:'Low',   status:'active',source:'manual',timestamp:new Date().toISOString(),confirmed_count:1},
+    {id:'demo4',latitude:16.5090,longitude:80.6450,severity:'High',  status:'active',source:'cctv',timestamp:new Date().toISOString(),confirmed_count:5},
+  ];
+  renderPotholeMarkers();
+}
+
+function renderPotholeMarkers(){
+  // Clear old
+  Object.values(potholeMarkers).forEach(m=>map.removeLayer(m));
+  potholeMarkers = {};
+  allPotholes.forEach(p=>{
+    const color = p.severity==='High'?'#ff1744':p.severity==='Medium'?'#ff9100':'#00e676';
+    const r     = p.severity==='High'?13:p.severity==='Medium'?10:7;
+    const m = L.circleMarker([p.latitude,p.longitude],{
+      radius:r, color, fillColor:color, fillOpacity:0.4, weight:2
+    }).addTo(map)
+      .bindPopup(`<b>${p.severity}</b> Pothole<br>Source: ${p.source||'unknown'}<br>
+        Confirmed: ${p.confirmed_count||1}<br>
+        <small>${p.timestamp?new Date(p.timestamp).toLocaleString():''}</small>`);
+    potholeMarkers[p.id] = m;
+  });
+}
+
+// ── TRACKING ──
+function toggleTracking(){
+  if(!isTracking) startTracking(); else stopTracking();
+}
+
+function startTracking(){
+  if(!navigator.geolocation){alert('Geolocation not supported');return}
+  isTracking = true;
+  document.getElementById('btnTrack').textContent='STOP';
+  document.getElementById('btnTrack').className='btn-track stop';
+  document.getElementById('trackDot').classList.remove('off');
+
+  watchId = navigator.geolocation.watchPosition(
+    pos => updatePosition(pos),
+    err => { console.warn(err); simulatePosition(); },
+    {enableHighAccuracy:true, maximumAge:3000, timeout:10000}
+  );
+}
+
+function stopTracking(){
+  isTracking = false;
+  if(watchId) navigator.geolocation.clearWatch(watchId);
+  document.getElementById('btnTrack').textContent='START';
+  document.getElementById('btnTrack').className='btn-track start';
+  document.getElementById('trackDot').classList.add('off');
+  document.getElementById('trackCoords').textContent='Not tracking';
+  document.getElementById('speedVal').textContent='—';
+  clearAlert();
+}
+
+// Simulate position if GPS blocked (demo)
+let simAngle = 0;
+function simulatePosition(){
+  console.log('Using simulated GPS position for demo');
+  setInterval(()=>{
+    if(!isTracking) return;
+    simAngle += 0.003;
+    const lat = 16.5062 + Math.sin(simAngle)*0.003;
+    const lng = 80.6480 + Math.cos(simAngle)*0.003;
+    updatePositionRaw(lat, lng, Math.random()*60+20);
+  }, 2000);
+}
+
+function updatePosition(pos){
+  const lat = pos.coords.latitude;
+  const lng = pos.coords.longitude;
+  const spd = pos.coords.speed ? (pos.coords.speed*3.6).toFixed(0) : null;
+  updatePositionRaw(lat, lng, spd);
+}
+
+function updatePositionRaw(lat, lng, spd){
+  myPos = {lat, lng};
+  document.getElementById('trackCoords').textContent = `${lat.toFixed(4)}, ${lng.toFixed(4)}`;
+  document.getElementById('speedVal').textContent = spd ? Math.round(spd) : '—';
+
+  // Update my marker
+  if(!myMarker){
+    myMarker = L.marker([lat,lng],{
+      icon: L.divIcon({
+        html:`<div style="
+          width:16px;height:16px;border-radius:50%;
+          background:#ffd600;border:3px solid #000;
+          box-shadow:0 0 12px rgba(255,214,0,0.8)
+        "></div>`,
+        iconSize:[16,16], iconAnchor:[8,8], className:''
+      })
+    }).addTo(map).bindPopup('📍 Your location');
+    map.setView([lat,lng],15);
+  } else {
+    myMarker.setLatLng([lat,lng]);
+  }
+  map.panTo([lat,lng]);
+  checkProximity(lat, lng);
+}
+
+// ── PROXIMITY CHECK ──
+function checkProximity(lat, lng){
+  const nearby = allPotholes
+    .map(p=>({...p, dist: haversine(lat,lng,p.latitude,p.longitude)}))
+    .filter(p=>p.dist <= ALERT_RADIUS_M)
+    .sort((a,b)=>a.dist-b.dist);
+
+  renderNearbyList(nearby);
+
+  if(nearby.length===0){clearAlert();return}
+
+  const closest = nearby[0];
+  const sev     = closest.severity;
+
+  // Only re-alert if changed
+  if(closest.id === lastAlertId) return;
+  lastAlertId = closest.id;
+
+  triggerAlert(sev, closest.dist);
+}
+
+function triggerAlert(sev, dist){
+  const banner = document.getElementById('alertBanner');
+  const level  = document.getElementById('alertLevel');
+  const msg    = document.getElementById('alertMsg');
+  const distEl = document.getElementById('alertDist');
+  const flash  = document.getElementById('alertFlash');
+
+  const msgs = {
+    High:   '⚠ DANGER — Large pothole ahead! Slow down immediately.',
+    Medium: '⚡ Caution — Pothole detected ahead. Reduce speed.',
+    Low:    '📍 Info — Minor road damage detected nearby.'
+  };
+  const colors = {High:'var(--high)',Medium:'var(--medium)',Low:'var(--low)'};
+  const bgs    = {High:'rgba(255,23,68,0.08)',Medium:'rgba(255,145,0,0.06)',Low:'rgba(0,230,118,0.06)'};
+
+  level.textContent  = `${sev.toUpperCase()} SEVERITY`;
+  msg.textContent    = msgs[sev];
+  distEl.textContent = `⬤ ${Math.round(dist)}m ahead`;
+  banner.style.borderLeftColor = colors[sev];
+  banner.style.background      = bgs[sev];
+  level.style.setProperty('--alert-color', colors[sev]);
+  flash.className = `flash-${sev.toLowerCase()}`;
+  setTimeout(()=>flash.className='', 2000);
+
+  // Audio alert (beep via Web Audio API)
+  try{
+    const ctx = new AudioContext();
+    const osc = ctx.createOscillator();
+    const gain= ctx.createGain();
+    osc.connect(gain); gain.connect(ctx.destination);
+    osc.frequency.value = sev==='High'?880:sev==='Medium'?660:440;
+    gain.gain.setValueAtTime(0.3, ctx.currentTime);
+    gain.gain.exponentialRampToValueAtTime(0.001, ctx.currentTime+0.4);
+    osc.start(); osc.stop(ctx.currentTime+0.4);
+  }catch(e){}
+}
+
+function clearAlert(){
+  document.getElementById('alertLevel').textContent = 'ALL CLEAR';
+  document.getElementById('alertMsg').textContent   = 'No potholes within 300m of your position.';
+  document.getElementById('alertDist').textContent  = 'Safe to proceed.';
+  document.getElementById('alertBanner').style.borderLeftColor = 'var(--low)';
+  document.getElementById('alertBanner').style.background = 'rgba(0,230,118,0.06)';
+  lastAlertId = null;
+}
+
+function renderNearbyList(nearby){
+  document.getElementById('nearbyCount').textContent = `(${nearby.length})`;
+  const list = document.getElementById('nearbyList');
+  if(nearby.length===0){
+    list.innerHTML='<div style="padding:20px;font-family:var(--font-m);font-size:11px;color:var(--muted);text-align:center">No potholes within 300m</div>';
+    return;
+  }
+  const colors={High:'#ff1744',Medium:'#ff9100',Low:'#00e676'};
+  list.innerHTML = nearby.map(p=>`
+    <div class="nearby-item" onclick="map.setView([${p.latitude},${p.longitude}],17)">
+      <div class="ni-dot" style="background:${colors[p.severity]}"></div>
+      <div class="ni-info">
+        <div class="ni-dist">${Math.round(p.dist)}m away</div>
+        <div class="ni-sev ${p.severity}">${p.severity} SEVERITY</div>
+        <div class="ni-src">via ${p.source||'manual'}</div>
+      </div>
+    </div>
+  `).join('');
+}
+
+// ── REPORT ──
+function useGPSForReport(){
+  if(myPos){
+    document.getElementById('rLat').value = myPos.lat.toFixed(5);
+    document.getElementById('rLng').value = myPos.lng.toFixed(5);
+  } else {
+    navigator.geolocation.getCurrentPosition(pos=>{
+      document.getElementById('rLat').value = pos.coords.latitude.toFixed(5);
+      document.getElementById('rLng').value = pos.coords.longitude.toFixed(5);
+    });
+  }
+}
+
+async function submitDriverReport(){
+  const lat = parseFloat(document.getElementById('rLat').value);
+  const lng = parseFloat(document.getElementById('rLng').value);
+  const sev = document.getElementById('rSev').value;
+  if(!lat||!lng||isNaN(lat)||isNaN(lng)){alert('Enter coordinates or use GPS');return}
+  try{
+    const res = await fetch('/report',{
+      method:'POST',
+      headers:{'Content-Type':'application/json'},
+      body: JSON.stringify({latitude:lat,longitude:lng,severity:sev,source:'driver',
+        timestamp:new Date().toISOString(),status:'active',confirmed_count:1})
+    });
+    if(res.ok){
+      alert('✓ Report submitted!');
+      loadPotholes();
+    }
+  }catch{alert('Cannot reach server — Flask not running?')}
+}
+
+// ── MAP CLICK → REPORT COORDS ──
+map.on('click', e=>{
+  document.getElementById('rLat').value = e.latlng.lat.toFixed(5);
+  document.getElementById('rLng').value = e.latlng.lng.toFixed(5);
+});
+
+// ── HAVERSINE DISTANCE (meters) ──
+function haversine(lat1,lon1,lat2,lon2){
+  const R=6371000, dLat=(lat2-lat1)*Math.PI/180,
+        dLon=(lon2-lon1)*Math.PI/180,
+        a=Math.sin(dLat/2)**2+Math.cos(lat1*Math.PI/180)*Math.cos(lat2*Math.PI/180)*Math.sin(dLon/2)**2;
+  return R*2*Math.atan2(Math.sqrt(a),Math.sqrt(1-a));
+}
+
+// ── INIT ──
+loadPotholes();
+setInterval(loadPotholes, 30000); // refresh every 30s
+</script>
+</body>
+</html>
