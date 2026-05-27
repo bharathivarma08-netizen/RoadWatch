@@ -100,7 +100,7 @@ python train_model.py
 
 ## 📹 Demo
 
-- 🎥 **Demo Video:** [https://drive.google.com/file/d/1I9EbodpdDMEOjuo4gOa5C4Vk29_TrZxE/view?usp=drivesdk](#) 
+- - 🎥 **Demo Video:** [Watch on Google Drive](https://drive.google.com/file/d/1I9EbodpdDMEOjuo4gOa5C4Vk29_TrZxE/view?usp=drivesdk)
 - 🌐 **Live Demo:** `http://localhost:5000`
 
 ---
